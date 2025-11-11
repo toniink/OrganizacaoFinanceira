@@ -34,7 +34,7 @@ export default function App() {
         <Stack.Screen 
           name="Cadastro" 
           component={CadastroScreen}
-          options={{ title: 'Criar Conta' }} // Customiza o título do header
+          options={{ title: 'Criar Conta', headerShown: false }} // Customiza o título do header
         />
         
         {/* <Stack.Screen 
