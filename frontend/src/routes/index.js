@@ -9,6 +9,9 @@ import RegisterScreen from '../screens/RegisterScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import TransactionScreen from '../screens/TransactionScreen';
 import TransactionListScreen from '../screens/TransactionListScreen';
+import AccountFormScreen from '../screens/AccountFormScreen'; 
+import CardFormScreen from '../screens/CardFormScreen';
+import ChartScreen from '../screens/ChartScreen'; 
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
@@ -16,7 +19,7 @@ const AppStack = createStackNavigator();
 export default function Routes() {
   const { signed, isLoading } = useAuth();
 
-  // Mostra um loading enquanto verifica se o usuário já está logado no storage
+  // Mostra um loading enquanto verifica se o usuário já está logado
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -32,17 +35,16 @@ export default function Routes() {
         {/* Tela Principal */}
         <AppStack.Screen name="Dashboard" component={DashboardScreen} />
         
-        {/* Tela de Inserir Nova Transação */}
-        <AppStack.Screen 
-          name="Transaction" 
-          component={TransactionScreen} 
-        />
+        {/* Telas de Transação */}
+        <AppStack.Screen name="Transaction" component={TransactionScreen} />
+        <AppStack.Screen name="TransactionList" component={TransactionListScreen} />
 
-        {/* Tela de Listagem (Extrato) */}
-        <AppStack.Screen 
-          name="TransactionList" 
-          component={TransactionListScreen} 
-        />
+        {/* Telas de Formulários */}
+        <AppStack.Screen name="AccountForm" component={AccountFormScreen} /> 
+        <AppStack.Screen name="CardForm" component={CardFormScreen} />
+        
+        {/* Tela de Gráficos */}
+        <AppStack.Screen name="ChartScreen" component={ChartScreen} /> 
       </AppStack.Navigator>
     );
   }

@@ -2,15 +2,18 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons'; 
-
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { COLORS, SIZING } from '../constants/theme';
 import api from '../services/api';
 
-export default function TransactionListScreen({ navigation }) {
+export default function TransactionListScreen({ navigation, route }) {
   const { user } = useAuth();
   const { colors } = useTheme();
+
+  // Parametros de Filtro (Se vierem da tela de Gráfico ou Dashboard)
+  const filterCategory = route.params?.filterCategory;
+  const filterName = route.params?.filterName;
 
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
@@ -25,14 +28,16 @@ export default function TransactionListScreen({ navigation }) {
       const month = currentDate.getMonth() + 1;
       const year = currentDate.getFullYear();
 
-      const response = await api.get(`/transactions/${user.id}`, {
-        params: { month, year }
-      });
+      // Monta os parâmetros da requisição
+      const params = { month, year };
+      // Se houver filtro de categoria vindo da navegação, adiciona-o
+      if (filterCategory) params.category_id = filterCategory;
 
+      const response = await api.get(`/transactions/${user.id}`, { params });
       const list = response.data;
       setTransactions(list);
 
-      // Calcular totais localmente para os cards superiores
+      // Calcula totais locais baseados na lista retornada
       let inc = 0;
       let exp = 0;
       list.forEach(item => {
@@ -48,13 +53,14 @@ export default function TransactionListScreen({ navigation }) {
     }
   };
 
+  // Recarrega os dados sempre que a tela ganha foco ou a data/filtro muda
   useFocusEffect(
     useCallback(() => {
       fetchTransactions();
-    }, [currentDate])
+    }, [currentDate, filterCategory])
   );
 
-  // Funções auxiliares
+  // --- Funções Auxiliares ---
   const formatCurrency = (value) => {
     return `R$${value.toFixed(2).replace('.', ',')}`;
   };
@@ -64,7 +70,7 @@ export default function TransactionListScreen({ navigation }) {
     return months[date.getMonth()];
   };
 
-  // Renderização de cada item (Clicável para Edição)
+  // --- Renderização do Item ---
   const renderItem = ({ item }) => {
     const isExpense = item.type === 'expense';
     const color = isExpense ? COLORS.error : COLORS.primary;
@@ -74,7 +80,7 @@ export default function TransactionListScreen({ navigation }) {
       <TouchableOpacity 
         style={styles.itemContainer}
         activeOpacity={0.7}
-        // Ao clicar, envia o objeto 'item' inteiro para a tela Transaction
+        // Navega para edição enviando o objeto transação
         onPress={() => navigation.navigate('Transaction', { transaction: item })}
       >
         {/* Ícone Esquerda */}
@@ -84,8 +90,10 @@ export default function TransactionListScreen({ navigation }) {
 
         {/* Textos Centrais */}
         <View style={{ flex: 1 }}>
-            <Text style={[styles.itemTitle, { color: colors.text }]}>{item.description}</Text>
-            <Text style={[styles.itemSubtitle, { color: colors.subText }]}>
+            <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.description}
+            </Text>
+            <Text style={[styles.itemSubtitle, { color: colors.subText }]} numberOfLines={1}>
                 {item.category_name || 'Sem Categoria'} / {item.account_name || 'Conta'}
             </Text>
         </View>
@@ -95,7 +103,6 @@ export default function TransactionListScreen({ navigation }) {
             <Text style={[styles.itemValue, { color }]}>
                 {isExpense ? '-' : ''}{formatCurrency(item.amount)}
             </Text>
-            {/* Indicador visual de que é clicável */}
             <Ionicons name="chevron-forward" size={16} color={colors.border} style={{ marginTop: 4 }} />
         </View>
       </TouchableOpacity>
@@ -107,23 +114,27 @@ export default function TransactionListScreen({ navigation }) {
       
       {/* CABEÇALHO */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('Dashboard')}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={30} color={colors.subText} /> 
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.primary }]}>Lançamentos</Text>
+        <Text style={[styles.headerTitle, { color: colors.primary }]}>
+            {filterName ? `Gastos: ${filterName}` : 'Lançamentos'}
+        </Text>
         <View style={{ width: 30 }} /> 
       </View>
 
-      {/* SELETOR DE MÊS */}
-      <View style={styles.monthSelector}>
-        <Text style={[styles.monthText, { color: colors.primary }]}>
-            {getMonthName(currentDate)}
-        </Text>
-        <Ionicons name="chevron-down" size={20} color={colors.primary} style={{ marginLeft: 5 }} />
-      </View>
+      {/* SELETOR DE MÊS (Oculto se estiver filtrando por categoria específica) */}
+      {!filterCategory && (
+        <View style={styles.monthSelector}>
+            <Text style={[styles.monthText, { color: colors.primary }]}>
+                {getMonthName(currentDate)}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={colors.primary} style={{ marginLeft: 5 }} />
+        </View>
+      )}
 
       {/* CARDS DE RESUMO (Entradas / Saídas) */}
-      <View style={styles.summaryContainer}>
+      <View style={[styles.summaryContainer, filterCategory && { marginTop: 20 }]}>
         {/* Card Entradas */}
         <View style={[styles.summaryCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
             <View style={[styles.summaryBar, { backgroundColor: COLORS.primary }]} />
@@ -145,7 +156,7 @@ export default function TransactionListScreen({ navigation }) {
 
       {/* LISTA PRINCIPAL */}
       <View style={[styles.listCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-        {/* Filtros e Opções do Card */}
+        {/* Cabeçalho da Lista (Filtros visuais) */}
         <View style={styles.listHeaderActions}>
             <TouchableOpacity style={{ marginRight: 15 }}>
                 <Ionicons name="filter-outline" size={20} color={colors.text} />
@@ -166,7 +177,7 @@ export default function TransactionListScreen({ navigation }) {
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                     <Text style={{ textAlign: 'center', color: colors.subText, marginTop: 20 }}>
-                        Nenhum lançamento neste mês.
+                        Nenhum lançamento encontrado.
                     </Text>
                 }
             />

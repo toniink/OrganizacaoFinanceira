@@ -21,28 +21,30 @@ routes.delete('/categories/:id', CategoryController.delete);
 // --- ROTAS DE CONTAS BANCÁRIAS (Carteira/Bancos) ---
 routes.get('/accounts/:userId', AccountController.index); // Listar contas
 routes.post('/accounts', AccountController.create);       // Criar conta
-routes.put('/accounts/:id', AccountController.update);    // Editar conta
+routes.put('/accounts/:id', AccountController.update);    // Editar conta (saldo/nome)
 routes.delete('/accounts/:id', AccountController.delete); // Deletar conta
 
-// --- ROTAS DE CARTÕES DE CRÉDITO ---
-routes.post('/cards', CreditCardController.create);
-routes.get('/cards/:userId', CreditCardController.list);
-routes.get('/cards/:cardId/invoice', CreditCardController.getInvoice);
+// --- ROTAS DE CARTÕES DE CRÉDITO (ATUALIZADO) ---
+routes.post('/cards', CreditCardController.create);       // Criar cartão (com valor inicial opcional)
+routes.get('/cards/:userId', CreditCardController.list);  // Listar com totais da fatura
+routes.get('/cards/:cardId/invoice', CreditCardController.getInvoice); // Detalhes (se necessário)
+routes.put('/cards/:id', CreditCardController.update);    // Editar cartão
+routes.delete('/cards/:id', CreditCardController.delete); // Deletar cartão
 
 // --- ROTAS DE TRANSAÇÕES (Lançamentos) ---
 // 1. Criar (POST) - com upload opcional
 routes.post('/transactions', upload.single('comprovante'), TransactionController.create);
 
-// 2. Dashboard (GET) - dados do gatinho
+// 2. Dashboard (GET) - dados do gatinho e saldo total
 routes.get('/dashboard/:userId', TransactionController.getDashboard);
 
-// 3. Listagem/Extrato (GET)
+// 3. Listagem/Extrato (GET) - com paginação
 routes.get('/transactions/:userId', TransactionController.index);
 
-// 4. Atualizar (PUT) - Novo
+// 4. Atualizar (PUT)
 routes.put('/transactions/:id', TransactionController.update);
 
-// 5. Deletar (DELETE) - Novo
+// 5. Deletar (DELETE)
 routes.delete('/transactions/:id', TransactionController.delete);
 
 module.exports = routes;
