@@ -1,361 +1,302 @@
-import React, { useState, useCallback } from 'react';
-import { 
-  View, Text, StyleSheet, ScrollView, RefreshControl, 
-  ActivityIndicator, TouchableOpacity, Platform, FlatList, Modal, TextInput 
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity,
+  Switch, Image, Alert, Platform, ActivityIndicator
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
+import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../context/ThemeContext';
-import { COLORS } from '../constants/theme'; 
+import { useAuth } from '../context/AuthContext';
+import { SIZING, COLORS } from '../constants/theme';
+import StyledButton from '../components/StyledButton';
 import api from '../services/api';
 
-export default function DashboardScreen({ navigation }) {
-  const { user } = useAuth();
+let DateTimePicker;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
+
+export default function TransactionScreen({ navigation, route }) {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  // Verifica se estamos no modo EDIÇÃO
+  const transactionToEdit = route.params?.transaction;
+  const isEditing = !!transactionToEdit;
+
+  // Estados do Formulário
+  const [type, setType] = useState(transactionToEdit?.type || 'expense'); 
+  const [amount, setAmount] = useState(transactionToEdit ? String(transactionToEdit.amount) : '');
+  const [description, setDescription] = useState(transactionToEdit?.description || '');
+  const [date, setDate] = useState(transactionToEdit ? new Date(transactionToEdit.date) : new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // --- Estados do Widget de Contas ---
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(""); 
+  
   const [accounts, setAccounts] = useState([]);
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedAccountForQuickAdd, setSelectedAccountForQuickAdd] = useState(null);
-  const [quickAddValue, setQuickAddValue] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState(""); 
+  
+  const [attachment, setAttachment] = useState(null);
 
-  // --- Estados do Widget de Transações ---
-  const [recentTransactions, setRecentTransactions] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingList, setLoadingList] = useState(false);
+  // Opções Extras
+  const [showExtraOptions, setShowExtraOptions] = useState(isEditing ? true : false);
+  const [isFixed, setIsFixed] = useState(transactionToEdit?.is_fixed === 1);
+  const [repeat, setRepeat] = useState(false);
+  const [observation, setObservation] = useState(''); // Obs simplificada
 
-  // --- Helpers ---
-  const formatCurrency = (value) => `R$${value ? value.toFixed(2).replace('.', ',') : '0,00'}`;
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [catsRes, accountsRes] = await Promise.all([
+          api.get(`/categories/${user.id}?type=${type}`),
+          api.get(`/accounts/${user.id}`)
+        ]);
+        setCategories(catsRes.data);
+        setAccounts(accountsRes.data);
+        
+        // Lógica de Seleção:
+        // Se estiver editando, tenta selecionar o ID que veio do banco.
+        // Se for novo, seleciona o primeiro.
+        
+        if (isEditing && transactionToEdit.category_id) {
+            setSelectedCategory(transactionToEdit.category_id);
+        } else if (catsRes.data.length > 0) {
+            setSelectedCategory(catsRes.data[0].id);
+        } else {
+            setSelectedCategory("");
+        }
+        
+        if (isEditing && transactionToEdit.origin_id) {
+            setSelectedAccount(transactionToEdit.origin_id);
+        } else {
+            // Tenta achar carteira padrão se for novo
+            const wallet = accountsRes.data.find(acc => acc.is_fixed === 1);
+            if (wallet) setSelectedAccount(wallet.id);
+            else if (accountsRes.data.length > 0) setSelectedAccount(accountsRes.data[0].id);
+            else setSelectedAccount("");
+        }
 
-  const getCatIcon = (status) => {
-    switch(status) {
-      case 'happy': return '😺'; case 'worried': return '😿'; case 'sad': return '😭'; default: return '😺';
+      } catch (error) {
+        console.error(error);
+      }
     }
-  };
-  const getCatMessage = (status) => {
-    switch(status) {
-      case 'happy': return 'O gatinho está feliz!'; case 'worried': return 'O gatinho está preocupado.'; case 'sad': return 'O gatinho está chorando!'; default: return 'Cuide do seu dinheiro!';
-    }
+    loadData();
+  }, [type]);
+
+  const onChangeDate = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) setDate(selectedDate);
   };
 
-  // --- API Calls ---
-  const fetchAllData = async () => {
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.5 });
+    if (!result.canceled) setAttachment(result.assets[0]);
+  };
+
+  // --- FUNÇÃO DE SALVAR/ATUALIZAR ---
+  const handleSubmit = async () => {
+    if (!amount || !description || !selectedCategory || !selectedAccount) {
+      const msg = 'Preencha valor, descrição, categoria e conta.';
+      Platform.OS === 'web' ? alert(msg) : Alert.alert('Atenção', msg);
+      return;
+    }
+
+    setLoading(true);
+    const payload = {
+        description: description + (observation ? `\nObs: ${observation}` : ''),
+        amount: parseFloat(amount.replace(',', '.')),
+        type,
+        date: date.toISOString().split('T')[0],
+        category_id: selectedCategory,
+        origin_type: 'account',
+        origin_id: selectedAccount,
+        is_fixed: isFixed ? 1 : 0
+    };
+
     try {
-      const date = new Date();
-      // 1. Dashboard Info
-      const dashRes = await api.get(`/dashboard/${user.id}`, {
-        params: { month: date.getMonth() + 1, year: date.getFullYear() }
-      });
-      setDashboardData(dashRes.data);
-
-      // 2. Contas (Accounts)
-      const accRes = await api.get(`/accounts/${user.id}`);
-      setAccounts(accRes.data);
-      const total = accRes.data.reduce((acc, item) => acc + item.balance, 0);
-      setTotalBalance(total);
-
-      // 3. Transações Recentes
-      setPage(1);
-      setHasMore(true);
-      fetchRecentTransactions(1, true);
-
+      if (isEditing) {
+        // UPDATE (PUT)
+        // Nota: Edição de anexo não implementada no back neste MVP, então enviamos JSON simples
+        await api.put(`/transactions/${transactionToEdit.id}`, payload);
+        const msg = 'Lançamento atualizado!';
+        Platform.OS === 'web' ? alert(msg) : Alert.alert('Sucesso', msg);
+      } else {
+        // CREATE (POST) - Usa FormData por causa do anexo
+        const formData = new FormData();
+        formData.append('user_id', user.id);
+        Object.keys(payload).forEach(key => formData.append(key, payload[key]));
+        
+        if (attachment) {
+            const uriParts = attachment.uri.split('.');
+            const fileType = uriParts[uriParts.length - 1] || 'jpg';
+            formData.append('comprovante', {
+                uri: Platform.OS === 'ios' ? attachment.uri.replace('file://', '') : attachment.uri,
+                type: `image/${fileType}`,
+                name: `comprovante.${fileType}`,
+            });
+        }
+        await api.post('/transactions', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const msg = 'Lançamento salvo!';
+        Platform.OS === 'web' ? alert(msg) : Alert.alert('Sucesso', msg);
+      }
+      navigation.goBack();
     } catch (error) {
-      console.log(error);
+      console.error(error);
+      const msg = 'Erro ao salvar.';
+      Platform.OS === 'web' ? alert(msg) : Alert.alert('Erro', msg);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  const fetchRecentTransactions = async (pageNumber = 1, shouldRefresh = false) => {
-    if (loadingList) return;
-    setLoadingList(true);
-    try {
-      const date = new Date();
-      const response = await api.get(`/transactions/${user.id}`, {
-        params: { month: date.getMonth() + 1, year: date.getFullYear(), page: pageNumber, limit: 5 }
-      });
-      const newItems = response.data;
-      
-      if (shouldRefresh) setRecentTransactions(newItems);
-      else setRecentTransactions(prev => [...prev, ...newItems]);
+  // --- FUNÇÃO DE DELETAR ---
+  const handleDelete = () => {
+    const confirmDelete = async () => {
+        setLoading(true);
+        try {
+            await api.delete(`/transactions/${transactionToEdit.id}`);
+            const msg = 'Lançamento excluído.';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Sucesso', msg);
+            navigation.goBack();
+        } catch (error) {
+            console.error(error);
+            Platform.OS === 'web' ? alert('Erro ao excluir') : Alert.alert('Erro', 'Não foi possível excluir.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-      if (newItems.length < 5) setHasMore(false);
-      else setHasMore(true);
-    } catch (error) { console.log(error); } finally { setLoadingList(false); }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchAllData();
-    }, [])
-  );
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAllData();
-  };
-
-  const loadMoreTransactions = () => {
-    if (hasMore && !loadingList) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchRecentTransactions(nextPage);
+    if (Platform.OS === 'web') {
+        if (confirm('Tem certeza que deseja excluir este lançamento?')) confirmDelete();
+    } else {
+        Alert.alert('Confirmar Exclusão', 'Tem certeza que deseja apagar este lançamento permanentemente?', [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Excluir', style: 'destructive', onPress: confirmDelete }
+        ]);
     }
   };
 
-  // --- Lógica do Modal de Adição Rápida (+) ---
-  const openQuickAddModal = (account) => {
-    setSelectedAccountForQuickAdd(account);
-    setQuickAddValue('');
-    setModalVisible(true);
-  };
-
-  const handleQuickAdd = async () => {
-    if (!quickAddValue || !selectedAccountForQuickAdd) return;
-
-    try {
-      const valueToAdd = parseFloat(quickAddValue.replace(',', '.'));
-      const newBalance = selectedAccountForQuickAdd.balance + valueToAdd;
-
-      // 1. Atualiza o saldo da Conta
-      await api.put(`/accounts/${selectedAccountForQuickAdd.id}`, {
-        balance: newBalance
-      });
-
-      // 2. CRIA UM LANÇAMENTO AUTOMÁTICO (Para ficar no histórico)
-      // Isso resolve a sua dúvida: agora fica registrado que entrou dinheiro.
-      await api.post('/transactions', {
-        user_id: user.id,
-        description: 'Ajuste Rápido / Entrada', // Nome genérico para identificar
-        amount: valueToAdd,
-        type: 'income',
-        date: new Date().toISOString().split('T')[0],
-        origin_type: 'account',
-        origin_id: selectedAccountForQuickAdd.id,
-        is_fixed: 0
-      });
-
-      setModalVisible(false);
-      fetchAllData(); // Recarrega dashboard e listas
-    } catch (error) {
-      alert('Erro ao atualizar saldo.');
-      console.log(error);
-    }
-  };
-
-  // --- Renders ---
-  const renderTransactionItem = ({ item }) => {
-    const isExpense = item.type === 'expense';
-    const color = isExpense ? COLORS.error : COLORS.primary;
-    const iconName = isExpense ? 'arrow-up-circle' : 'arrow-down-circle';
-    return (
-      <TouchableOpacity style={styles.miniItemContainer} onPress={() => navigation.navigate('Transaction', { transaction: item })}>
-        <Ionicons name={iconName} size={24} color={color} style={{ marginRight: 10 }} />
-        <View style={{ flex: 1 }}>
-            <Text style={[styles.miniItemTitle, { color: colors.text }]} numberOfLines={1}>{item.description}</Text>
-            <Text style={[styles.miniItemSubtitle, { color: colors.subText }]} numberOfLines={1}>{item.category_name || 'Geral'} / {item.account_name || 'Conta'}</Text>
-        </View>
-        <Text style={[styles.miniItemValue, { color }]}>{formatCurrency(item.amount)}</Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderAccountItem = ({ item }) => {
-    const isPositive = item.balance >= 0;
-    const iconName = item.is_fixed === 1 ? 'wallet-outline' : 'business-outline';
-
-    return (
-        <View style={styles.accountRow}>
-            <TouchableOpacity 
-                style={styles.accountInfoClickable}
-                onPress={() => navigation.navigate('AccountForm', { account: item })}
-            >
-                <Ionicons name={iconName} size={24} color={colors.text} style={{ marginRight: 10 }} />
-                <Text style={[styles.accountName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-                
-                <Text style={[styles.accountValue, { color: isPositive ? colors.primary : colors.error }]}>
-                    {formatCurrency(item.balance)}
-                </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => openQuickAddModal(item)} style={styles.plusButton}>
-                <Ionicons name="add-circle-outline" size={28} color={colors.text} />
-            </TouchableOpacity>
-        </View>
-    );
-  };
-
-  const cardStyle = [styles.card, { backgroundColor: colors.card }, Platform.select({ ios: { shadowColor: colors.border }, android: { shadowColor: colors.border }, web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.05)' } })];
-  const fabStyle = [styles.fab, { backgroundColor: colors.primary }, Platform.select({ ios: { shadowColor: colors.primary }, android: { shadowColor: colors.primary }, web: { boxShadow: '0px 4px 12px rgba(74, 222, 128, 0.4)' } })];
+  const inputStyle = [styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }];
+  const labelStyle = [styles.label, { color: colors.text }];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView 
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        nestedScrollEnabled={true}
-      >
-        <View style={styles.headerRow}>
-            <View>
-                <Text style={[styles.welcome, { color: colors.subText }]}>Olá, {user?.name}</Text>
-                <Text style={[styles.title, { color: colors.text }]}>Visão Geral</Text>
-            </View>
-            <TouchableOpacity style={[styles.extractButton, { borderColor: colors.primary }]} onPress={() => navigation.navigate('TransactionList')}>
-                <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>Ver Extrato</Text>
-                <Ionicons name="list" size={16} color={colors.primary} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={{ fontSize: 24, color: colors.text }}>←</Text>
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: colors.text }]}>
+            {isEditing ? 'Editar Transação' : 'Nova Transação'}
+        </Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={[styles.typeSelector, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+          <TouchableOpacity style={[styles.typeButton, type === 'expense' && { backgroundColor: colors.error }]} onPress={() => setType('expense')}>
+            <Text style={[styles.typeText, type === 'expense' && { color: '#FFF' }]}>Despesa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.typeButton, type === 'income' && { backgroundColor: colors.primary }]} onPress={() => setType('income')}>
+            <Text style={[styles.typeText, type === 'income' && { color: '#FFF' }]}>Receita</Text>
+          </TouchableOpacity>
         </View>
 
-        {loading && !refreshing ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+        <Text style={labelStyle}>Valor (R$)</Text>
+        <TextInput style={[inputStyle, styles.amountInput, { color: type === 'expense' ? colors.error : colors.primary }]} placeholder="0,00" placeholderTextColor={colors.subText} value={amount} onChangeText={setAmount} keyboardType="numeric" />
+
+        <Text style={labelStyle}>Descrição</Text>
+        <TextInput style={inputStyle} placeholder="Ex: Almoço" placeholderTextColor={colors.subText} value={description} onChangeText={setDescription} />
+
+        <Text style={labelStyle}>Categoria</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+          <Picker selectedValue={selectedCategory} onValueChange={(itemValue) => setSelectedCategory(itemValue)} style={{ color: colors.text, height: Platform.OS === 'web' ? 40 : undefined }}>
+            <Picker.Item label="Selecione..." value="" color={colors.subText} />
+            {categories.map(cat => (<Picker.Item key={cat.id} label={cat.name} value={cat.id} />))}
+          </Picker>
+        </View>
+
+        <Text style={labelStyle}>Data</Text>
+        {Platform.OS === 'web' ? (
+            <TextInput style={inputStyle} value={date.toISOString().split('T')[0]} onChangeText={(text) => { const newDate = new Date(text); if(!isNaN(newDate)) setDate(newDate); }} placeholder="YYYY-MM-DD" />
         ) : (
-          <>
-            {/* GATINHO */}
-            <View style={cardStyle}>
-              <View style={styles.catContainer}>
-                <Text style={styles.catIcon}>{getCatIcon(dashboardData?.catStatus)}</Text>
-                <Text style={[styles.catMessage, { color: colors.text }]}>{getCatMessage(dashboardData?.catStatus)}</Text>
-                <Text style={{ color: colors.subText, marginTop: 5 }}>{dashboardData?.percentageConsumed || 0}% da renda consumida</Text>
-              </View>
-            </View>
-
-            {/* WIDGET CONTAS */}
-            <Text style={[styles.sectionTitle, { color: '#2a3b96', marginBottom: 10 }]}>Contas:</Text>
-            <View style={[styles.recentCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                <View style={{ maxHeight: 250 }}>
-                    <FlatList
-                        data={accounts}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={renderAccountItem}
-                        scrollEnabled={true}
-                        nestedScrollEnabled={true}
-                        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />}
-                    />
-                </View>
-                <TouchableOpacity 
-                    style={[styles.seeAllButton, { backgroundColor: '#2a3b96' }]}
-                    onPress={() => navigation.navigate('AccountForm')}
-                >
-                    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Adicionar Banco</Text>
+            <>
+                <TouchableOpacity style={[inputStyle, { justifyContent: 'center' }]} onPress={() => setShowDatePicker(true)}>
+                  <Text style={{ color: colors.text }}>{date.toLocaleDateString('pt-BR')}</Text>
                 </TouchableOpacity>
-                <View style={styles.footerRow}>
-                    <Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text>
-                    <Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(totalBalance)}</Text>
-                </View>
-            </View>
-
-            {/* WIDGET TRANSAÇÕES */}
-            <Text style={[styles.sectionTitle, { color: '#2a3b96', marginTop: 25, marginBottom: 10 }]}>Últimos lançamentos:</Text>
-            <View style={[styles.recentCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                <Text style={{ color: colors.subText, fontSize: 12, marginBottom: 5 }}>Esse Mês</Text>
-                <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 10 }} />
-                <View style={{ height: 220 }}> 
-                    <FlatList
-                        data={recentTransactions}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={renderTransactionItem}
-                        onEndReached={loadMoreTransactions}
-                        onEndReachedThreshold={0.1}
-                        nestedScrollEnabled={true}
-                        ListFooterComponent={loadingList ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-                        ListEmptyComponent={<Text style={{ textAlign: 'center', color: colors.subText, marginTop: 20 }}>Sem lançamentos.</Text>}
-                    />
-                </View>
-                <TouchableOpacity 
-                    style={[styles.seeAllButton, { backgroundColor: '#2a3b96', marginTop: 10 }]}
-                    onPress={() => navigation.navigate('TransactionList')}
-                >
-                    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Ver lançamentos</Text>
-                </TouchableOpacity>
-                <View style={styles.footerRow}>
-                    <Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text>
-                    {/* Total agora reflete apenas a soma dos lançamentos do mês, não o saldo global */}
-                    <Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(dashboardData?.income - dashboardData?.expense)}</Text>
-                </View>
-            </View>
-
-            <View style={{ height: 100 }} />
-          </>
+                {showDatePicker && DateTimePicker && (<DateTimePicker value={date} mode="date" display="default" onChange={onChangeDate} />)}
+            </>
         )}
-      </ScrollView>
 
-      <TouchableOpacity style={fabStyle} onPress={() => navigation.navigate('Transaction')} activeOpacity={0.8}>
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+        <Text style={labelStyle}>Conta de Origem</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+          <Picker selectedValue={selectedAccount} onValueChange={(itemValue) => setSelectedAccount(itemValue)} style={{ color: colors.text, height: Platform.OS === 'web' ? 40 : undefined }}>
+            <Picker.Item label="Selecione..." value="" color={colors.subText} />
+            {accounts.map(acc => (<Picker.Item key={acc.id} label={acc.name} value={acc.id} />))}
+          </Picker>
+        </View>
 
-      {/* MODAL DE ADIÇÃO RÁPIDA */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
-            <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Adicionar Saldo</Text>
-                <Text style={{ color: colors.subText, marginBottom: 15 }}>
-                    Adicionando em: {selectedAccountForQuickAdd?.name}
-                </Text>
-                <TextInput 
-                    style={[styles.modalInput, { color: colors.text, borderColor: colors.border }]}
-                    placeholder="Valor (Ex: 50.00)"
-                    placeholderTextColor={colors.subText}
-                    keyboardType="numeric"
-                    autoFocus
-                    value={quickAddValue}
-                    onChangeText={setQuickAddValue}
-                />
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleQuickAdd}>
-                    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Confirmar</Text>
+        {!isEditing && (
+            <>
+                <Text style={labelStyle}>Anexo (Opcional)</Text>
+                <TouchableOpacity style={[inputStyle, styles.attachmentButton]} onPress={pickImage}>
+                {attachment ? (<Image source={{ uri: attachment.uri }} style={styles.attachmentImage} />) : (<Text style={{ color: colors.subText }}>📎 Toque para anexar imagem</Text>)}
                 </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
-      </Modal>
+            </>
+        )}
 
+        <TouchableOpacity onPress={() => setShowExtraOptions(!showExtraOptions)} style={{ marginTop: 20, marginBottom: 10 }}>
+          <Text style={{ color: colors.primary, fontWeight: 'bold' }}>{showExtraOptions ? 'Ocultar Opções Extras' : 'Mostrar Opções Extras'}</Text>
+        </TouchableOpacity>
+
+        {showExtraOptions && (
+          <View style={[styles.extraOptionsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.switchRow}>
+              <Text style={{ color: colors.text }}>Lançamento Fixo</Text>
+              <Switch trackColor={{ false: colors.border, true: colors.primary }} thumbColor={'#FFF'} onValueChange={setIsFixed} value={isFixed} />
+            </View>
+            {!isEditing && (
+                <View style={styles.switchRow}>
+                <Text style={{ color: colors.text }}>Repetir</Text>
+                <Switch trackColor={{ false: colors.border, true: colors.primary }} thumbColor={'#FFF'} onValueChange={setRepeat} value={repeat} />
+                </View>
+            )}
+            <Text style={[labelStyle, { marginTop: 10 }]}>Observação</Text>
+            <TextInput style={[inputStyle, { height: 80, textAlignVertical: 'top' }]} placeholder="Detalhes..." placeholderTextColor={colors.subText} value={observation} onChangeText={setObservation} multiline />
+          </View>
+        )}
+
+        <StyledButton title={isEditing ? "ATUALIZAR LANÇAMENTO" : "SALVAR LANÇAMENTO"} onPress={handleSubmit} loading={loading} style={{ marginTop: 30 }} />
+
+        {/* BOTÃO DELETAR (Só aparece se estiver editando) */}
+        {isEditing && (
+            <TouchableOpacity onPress={handleDelete} style={[styles.deleteButton, { borderColor: colors.error }]}>
+                <Text style={{ color: colors.error, fontWeight: 'bold' }}>🗑️ Excluir Lançamento</Text>
+            </TouchableOpacity>
+        )}
+
+        <View style={{ height: 50 }} />
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, paddingTop: 50 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  welcome: { fontSize: 16 },
-  title: { fontSize: 28, fontWeight: 'bold' },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold' },
-  card: { padding: 20, borderRadius: 16, marginBottom: 20, alignItems: 'center', elevation: 2 },
-  recentCard: { borderRadius: 16, padding: 15, elevation: 3, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  accountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 5 },
-  accountInfoClickable: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  accountName: { fontSize: 14, fontWeight: '600', flex: 1, marginRight: 10 },
-  accountValue: { fontSize: 14, fontWeight: 'bold' },
-  plusButton: { paddingLeft: 10 },
-  miniItemContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  miniItemTitle: { fontSize: 14, fontWeight: 'bold' },
-  miniItemSubtitle: { fontSize: 10 },
-  miniItemValue: { fontSize: 14, fontWeight: 'bold' },
-  seeAllButton: { marginTop: 15, paddingVertical: 12, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  footerRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 10 },
-  extractButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
-  catContainer: { alignItems: 'center' },
-  catIcon: { fontSize: 80, marginBottom: 10 },
-  catMessage: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  row: { flexDirection: 'row', justifyContent: 'space-between' },
-  statCard: { width: '48%', padding: 15, borderRadius: 12, borderWidth: 1, elevation: 1 },
-  amount: { fontSize: 18, fontWeight: 'bold', marginTop: 5 },
-  fab: { position: 'absolute', bottom: 30, right: 30, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 5 },
-  fabText: { fontSize: 32, color: '#FFF', fontWeight: 'bold', marginTop: -2 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '80%', padding: 20, borderRadius: 16, alignItems: 'center', elevation: 5 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-  modalInput: { width: '100%', borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 18, textAlign: 'center', marginBottom: 20 },
-  modalButton: { width: '100%', padding: 12, borderRadius: 8, alignItems: 'center' }
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 50 : 20, paddingHorizontal: SIZING.padding, paddingBottom: 15, borderBottomWidth: 1 },
+  title: { fontSize: 18, fontWeight: 'bold' },
+  scrollContent: { padding: SIZING.padding },
+  typeSelector: { flexDirection: 'row', borderWidth: 1, borderRadius: SIZING.radius, marginBottom: 20, overflow: 'hidden' },
+  typeButton: { flex: 1, padding: 12, alignItems: 'center' },
+  typeText: { fontWeight: 'bold' },
+  label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, marginLeft: 2, marginTop: 15 },
+  input: { borderWidth: 1, borderRadius: 12, padding: 15, fontSize: 16 },
+  amountInput: { fontSize: 24, fontWeight: 'bold', textAlign: 'center' },
+  pickerContainer: { borderWidth: 1, borderRadius: 12, overflow: 'hidden', justifyContent: 'center', marginBottom: 5 },
+  attachmentButton: { alignItems: 'center', justifyContent: 'center', height: 150 },
+  attachmentImage: { width: '100%', height: '100%', borderRadius: 12, resizeMode: 'cover' },
+  extraOptionsCard: { padding: 15, borderWidth: 1, borderRadius: SIZING.radius, marginBottom: 10 },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  deleteButton: { marginTop: 20, padding: 15, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
 });

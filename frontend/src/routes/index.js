@@ -12,6 +12,8 @@ import TransactionListScreen from '../screens/TransactionListScreen';
 import AccountFormScreen from '../screens/AccountFormScreen'; 
 import CardFormScreen from '../screens/CardFormScreen';
 import ChartScreen from '../screens/ChartScreen'; 
+import ReportScreen from '../screens/ReportScreen';
+import ChatScreen from '../screens/ChatScreen';
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
@@ -45,7 +47,13 @@ export default function Routes() {
         
         {/* Tela de Gráficos */}
         <AppStack.Screen name="ChartScreen" component={ChartScreen} /> 
+
+        {/*Tela de Relatorio*/}
+        <AppStack.Screen name="ReportScreen" component={ReportScreen}/>
+
+        <AppStack.Screen name="ChatScreen" component={ChatScreen} />
       </AppStack.Navigator>
+     
     );
   }
 

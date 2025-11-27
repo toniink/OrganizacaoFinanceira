@@ -11,7 +11,7 @@ export default function TransactionListScreen({ navigation, route }) {
   const { user } = useAuth();
   const { colors } = useTheme();
 
-  // Parametros de Filtro (Se vierem da tela de Gráfico ou Dashboard)
+  // Filtros opcionais vindos de outras telas
   const filterCategory = route.params?.filterCategory;
   const filterName = route.params?.filterName;
 
@@ -109,12 +109,23 @@ export default function TransactionListScreen({ navigation, route }) {
     );
   };
 
+  // Estilo do Botão Flutuante (FAB)
+  const fabStyle = [
+    styles.fab, 
+    { backgroundColor: colors.primary }, 
+    Platform.select({ 
+      ios: { shadowColor: colors.primary }, 
+      android: { shadowColor: colors.primary }, 
+      web: { boxShadow: '0px 4px 12px rgba(74, 222, 128, 0.4)' } 
+    })
+  ];
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       
       {/* CABEÇALHO */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.navigate('Dashboard')}>
             <Ionicons name="arrow-back" size={30} color={colors.subText} /> 
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.primary }]}>
@@ -183,6 +194,16 @@ export default function TransactionListScreen({ navigation, route }) {
             />
         )}
       </View>
+
+      {/* FAB - Botão Flutuante */}
+      <TouchableOpacity 
+        style={fabStyle} 
+        onPress={() => navigation.navigate('Transaction')} 
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
     </View>
   );
 }
@@ -288,5 +309,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginRight: 5
+  },
+
+  // FAB Style
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 10,
+    zIndex: 100, // Garante que fique em cima
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  fabText: {
+    fontSize: 32,
+    color: '#FFF',
+    fontWeight: 'bold',
+    marginTop: -2 
   }
 });
