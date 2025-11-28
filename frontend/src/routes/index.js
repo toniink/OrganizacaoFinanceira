@@ -1,9 +1,10 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import { useAuth } from '../context/AuthContext';
 import { ActivityIndicator, View } from 'react-native';
 
-// --- Importação das Telas ---
+// Telas
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -11,17 +12,41 @@ import TransactionScreen from '../screens/TransactionScreen';
 import TransactionListScreen from '../screens/TransactionListScreen';
 import AccountFormScreen from '../screens/AccountFormScreen'; 
 import CardFormScreen from '../screens/CardFormScreen';
-import ChartScreen from '../screens/ChartScreen'; 
-import ReportScreen from '../screens/ReportScreen';
+import ChartScreen from '../screens/ChartScreen';
 import ChatScreen from '../screens/ChatScreen';
+import ReportScreen from '../screens/ReportScreen';
+
+import ProfileScreen from '../screens/ProfileScreen';
+import { SettingsScreen, ThemesScreen, AboutScreen, HelpScreen } from '../screens/PlaceholderScreens';
+
+// Componente Customizado do Menu
+import CustomDrawer from '../components/CustomDrawer';
 
 const AuthStack = createStackNavigator();
 const AppStack = createStackNavigator();
+const Drawer = createDrawerNavigator();
+
+// --- NAVEGADOR DO MENU LATERAL (DRAWER) ---
+function DrawerRoutes() {
+  return (
+    <Drawer.Navigator 
+      drawerContent={(props) => <CustomDrawer {...props} />} 
+      screenOptions={{ headerShown: false, drawerStyle: { width: '80%' } }}
+    >
+      <Drawer.Screen name="Dashboard" component={DashboardScreen} />
+      <Drawer.Screen name="Profile" component={ProfileScreen} />
+      <Drawer.Screen name="Settings" component={SettingsScreen} />
+      <Drawer.Screen name="ChatScreen" component={ChatScreen} />
+      <Drawer.Screen name="Themes" component={ThemesScreen} />
+      <Drawer.Screen name="About" component={AboutScreen} />
+      <Drawer.Screen name="Help" component={HelpScreen} />
+    </Drawer.Navigator>
+  );
+}
 
 export default function Routes() {
   const { signed, isLoading } = useAuth();
 
-  // Mostra um loading enquanto verifica se o usuário já está logado
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -30,34 +55,24 @@ export default function Routes() {
     );
   }
 
-  // Se o usuário estiver logado (signed = true), mostra as telas do App
   if (signed) {
     return (
       <AppStack.Navigator screenOptions={{ headerShown: false }}>
-        {/* Tela Principal */}
-        <AppStack.Screen name="Dashboard" component={DashboardScreen} />
+        {/* A Tela Principal agora é o Drawer, que contém o Dashboard */}
+        <AppStack.Screen name="MainDrawer" component={DrawerRoutes} />
         
-        {/* Telas de Transação */}
+        {/* Telas que abrem POR CIMA do menu (com botão voltar) */}
         <AppStack.Screen name="Transaction" component={TransactionScreen} />
         <AppStack.Screen name="TransactionList" component={TransactionListScreen} />
-
-        {/* Telas de Formulários */}
         <AppStack.Screen name="AccountForm" component={AccountFormScreen} /> 
+        <AppStack.Screen name="ReportScreen" component={ReportScreen} /> 
         <AppStack.Screen name="CardForm" component={CardFormScreen} />
-        
-        {/* Tela de Gráficos */}
         <AppStack.Screen name="ChartScreen" component={ChartScreen} /> 
-
-        {/*Tela de Relatorio*/}
-        <AppStack.Screen name="ReportScreen" component={ReportScreen}/>
-
-        <AppStack.Screen name="ChatScreen" component={ChatScreen} />
+       
       </AppStack.Navigator>
-     
     );
   }
 
-  // Se não estiver logado, mostra as telas de Autenticação
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />

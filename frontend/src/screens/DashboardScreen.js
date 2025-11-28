@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, RefreshControl, 
   ActivityIndicator, TouchableOpacity, Platform, FlatList, Modal, TextInput 
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, DrawerActions } from '@react-navigation/native';
 import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -202,7 +202,15 @@ export default function DashboardScreen({ navigation }) {
         showsVerticalScrollIndicator={true}
       >
         <View style={styles.headerRow}>
-            <View><Text style={[styles.welcome, { color: colors.subText }]}>Olá, {user?.name}</Text><Text style={[styles.title, { color: colors.text }]}>Visão Geral</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.openDrawer())} style={{ marginRight: 15 }}>
+                    <Ionicons name="menu" size={32} color={colors.text} />
+                </TouchableOpacity>
+                <View>
+                    <Text style={[styles.welcome, { color: colors.subText }]}>Olá, {user?.name}</Text>
+                    <Text style={[styles.title, { color: colors.text }]}>Visão Geral</Text>
+                </View>
+            </View>
             <TouchableOpacity style={[styles.extractButton, { borderColor: colors.primary }]} onPress={() => navigation.navigate('TransactionList')}><Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>Ver Extrato</Text><Ionicons name="list" size={16} color={colors.primary} style={{ marginLeft: 4 }} /></TouchableOpacity>
         </View>
 
