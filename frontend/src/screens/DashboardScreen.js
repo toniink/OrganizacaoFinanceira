@@ -6,47 +6,49 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { PieChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
+
+// Contextos e Componentes
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { COLORS } from '../constants/theme'; 
 import { PETS } from '../constants/pets';
 import api from '../services/api';
+import ScreenWrapper from '../components/ScreenWrapper';
+import AppHeader from '../components/AppHeader';
+import InfoCard from '../components/InfoCard';
 
 export default function DashboardScreen({ navigation }) {
   const { user } = useAuth();
   const { colors, selectedPet } = useTheme();
   
-  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dashboardData, setDashboardData] = useState(null);
 
-  // Dados dos Widgets
+  // Dados
   const [pieData, setPieData] = useState([]);
   const [categoryList, setCategoryList] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [cards, setCards] = useState([]);
   const [cardTab, setCardTab] = useState('open');
-  const [cardsTotal, setCardsTotal] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
   
-  // Controle de Interface
+  // Controles
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedAccountForQuickAdd, setSelectedAccountForQuickAdd] = useState(null);
   const [quickAddValue, setQuickAddValue] = useState('');
-  const [loadingList, setLoadingList] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  
-  // Controle de Visualização de Saldo
   const [showBalance, setShowBalance] = useState(true);
+  
+  const [loadingList, setLoadingList] = useState(false);
 
-  const formatCurrency = (value) => `R$${value ? value.toFixed(2).replace('.', ',') : '0,00'}`;
+  const isWeb = Platform.OS === 'web';
+  const formatCurrency = (val) => `R$${val ? val.toFixed(2).replace('.', ',') : '0,00'}`;
   const GRAPH_COLORS = ['#4ade80', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#2dd4bf'];
 
-  // --- Lógica de Temas ---
+  // --- Helpers de Tema (Pet) ---
   const currentPetObj = PETS.find(p => p.id === selectedPet) || PETS[0];
-
+  
   const getPetImageSource = (status) => {
     switch(status) {
       case 'happy': return currentPetObj.imageHappy;
@@ -56,66 +58,56 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
+  // Cor da Moldura Dinâmica
   const getMoodColor = (status) => {
     switch(status) {
-      case 'happy': return '#84cc16'; // Verde
-      case 'worried': return '#f97316'; // Laranja
-      case 'sad': return '#ef4444'; // Vermelho
-      default: return '#84cc16';
+      case 'happy': return '#22c55e';   // Verde (Feliz)
+      case 'worried': return '#f59e0b'; // Laranja (Preocupado)
+      case 'sad': return '#ef4444';     // Vermelho (Chorando)
+      default: return '#22c55e';
     }
   };
 
   const getPetMessage = (status) => {
     const name = currentPetObj.name;
-    switch(status) {
-      case 'happy': return `O ${name} está feliz! Continue assim!`;
-      case 'worried': return `O ${name} está ficando preocupado...`;
-      case 'sad': return `O ${name} está chorando! Cuidado com os gastos!`;
-      default: return `Cuide bem do seu dinheiro!`;
-    }
+    if(status === 'sad') return `O ${name} está triste! Economize!`;
+    if(status === 'worried') return `O ${name} está preocupado...`;
+    return `O ${name} está feliz!`;
   };
 
-  // --- API Calls ---
+  // --- API ---
   const fetchAllData = async () => {
     try {
       const date = new Date();
       const month = date.getMonth() + 1;
       const year = date.getFullYear();
 
-      // 1. Dashboard
       const dashRes = await api.get(`/dashboard/${user.id}`, { params: { month, year } });
       setDashboardData(dashRes.data);
       
-      // Gráfico
       const { categoryExpenses, expense } = dashRes.data;
       if (categoryExpenses && expense > 0) {
-        const formattedPie = categoryExpenses.map((cat, index) => ({
-            value: cat.total,
-            color: GRAPH_COLORS[index % GRAPH_COLORS.length],
+        setPieData(categoryExpenses.map((cat, idx) => ({ 
+            value: cat.total, 
+            color: GRAPH_COLORS[idx % GRAPH_COLORS.length],
             text: `${((cat.total / expense) * 100).toFixed(0)}%`,
-        }));
-        setPieData(formattedPie);
-        setCategoryList(categoryExpenses.slice(0, 2).map((cat, index) => ({
-            ...cat, color: GRAPH_COLORS[index % GRAPH_COLORS.length]
+            textColor: '#000',
+            shiftTextX: -1,
         })));
-      } else {
-        setPieData([]);
-        setCategoryList([]);
-      }
+        setCategoryList(categoryExpenses.slice(0, 2).map((cat, idx) => ({ 
+            ...cat, 
+            color: GRAPH_COLORS[idx % GRAPH_COLORS.length],
+            percent: ((cat.total / expense) * 100).toFixed(0)
+        })));
+      } else { setPieData([]); setCategoryList([]); }
 
-      // 2. Contas
       const accRes = await api.get(`/accounts/${user.id}`);
       setAccounts(accRes.data);
-      const totalAcc = accRes.data.reduce((acc, item) => acc + item.balance, 0);
-      setTotalBalance(totalAcc);
+      setTotalBalance(accRes.data.reduce((acc, item) => acc + item.balance, 0));
 
-      // 3. Cartões
       const cardRes = await api.get(`/cards/${user.id}`, { params: { month, year } });
       setCards(cardRes.data);
 
-      // 4. Transações Recentes
-      setPage(1);
-      setHasMore(true);
       fetchRecentTransactions(1, true);
 
     } catch (error) { console.log(error); } finally { setLoading(false); setRefreshing(false); }
@@ -126,267 +118,319 @@ export default function DashboardScreen({ navigation }) {
     setLoadingList(true);
     try {
       const date = new Date();
-      const response = await api.get(`/transactions/${user.id}`, {
-        params: { month: date.getMonth() + 1, year: date.getFullYear(), page: pageNumber, limit: 5 }
-      });
-      const newItems = response.data;
-      if (shouldRefresh) setRecentTransactions(newItems);
-      else setRecentTransactions(prev => [...prev, ...newItems]);
-      
-      if (newItems.length < 5) setHasMore(false);
-      else setHasMore(true);
+      const res = await api.get(`/transactions/${user.id}`, { params: { month: date.getMonth() + 1, year: date.getFullYear(), page: pageNumber, limit: 5 } });
+      if (shouldRefresh) setRecentTransactions(res.data);
+      else setRecentTransactions(prev => [...prev, ...res.data]);
     } catch (error) { console.log(error); } finally { setLoadingList(false); }
   };
 
   useFocusEffect(useCallback(() => { fetchAllData(); }, []));
   const onRefresh = () => { setRefreshing(true); fetchAllData(); };
 
-  // --- Handlers ---
+  const filteredCards = cards.filter(c => c.invoiceStatus === cardTab);
+  const filteredCardsTotal = filteredCards.reduce((acc, item) => acc + item.invoiceAmount, 0);
+
   const handleQuickAdd = async () => {
     if (!quickAddValue || !selectedAccountForQuickAdd) return;
     try {
-      const valueToAdd = parseFloat(quickAddValue.replace(',', '.'));
-      const newBalance = selectedAccountForQuickAdd.balance + valueToAdd;
-      await api.put(`/accounts/${selectedAccountForQuickAdd.id}`, { balance: newBalance });
-      await api.post('/transactions', { user_id: user.id, description: 'Ajuste Rápido / Entrada', amount: valueToAdd, type: 'income', date: new Date().toISOString().split('T')[0], origin_type: 'account', origin_id: selectedAccountForQuickAdd.id, is_fixed: 0 });
-      setModalVisible(false); fetchAllData();
-    } catch (error) { alert('Erro'); }
+        const val = parseFloat(quickAddValue.replace(',', '.'));
+        await api.put(`/accounts/${selectedAccountForQuickAdd.id}`, { balance: selectedAccountForQuickAdd.balance + val });
+        await api.post('/transactions', { user_id: user.id, description: 'Ajuste Rápido', amount: val, type: 'income', date: new Date().toISOString().split('T')[0], origin_type: 'account', origin_id: selectedAccountForQuickAdd.id, is_fixed: 0 });
+        setModalVisible(false); fetchAllData();
+    } catch (e) { alert('Erro'); }
   };
-
-  const loadMoreTransactions = () => { if (hasMore && !loadingList) { const nextPage = page + 1; setPage(nextPage); fetchRecentTransactions(nextPage); }};
 
   // --- Renders ---
-  const filteredCards = cards.filter(c => c.invoiceStatus === cardTab);
-  const filteredCardsTotal = filteredCards.reduce((acc, item) => acc + item.invoiceAmount, 0);
-  const isWeb = Platform.OS === 'web';
-
-  const SafeList = ({ data, renderItem, ...props }) => {
-    if (isWeb) return <View>{data.map(item => renderItem(item))}</View>;
-    return <FlatList data={data} keyExtractor={(item) => item.id.toString()} renderItem={({item}) => renderItem(item)} nestedScrollEnabled={true} {...props} />;
-  };
-
-  // Funções de renderização de linha
-  const renderAccountItem = (item) => (
-    <View key={item.id} style={styles.accountRow}>
-        <TouchableOpacity style={styles.accountInfoClickable} onPress={() => navigation.navigate('AccountForm', { account: item })}>
-            <Ionicons name={item.is_fixed === 1 ? 'wallet-outline' : 'business-outline'} size={24} color={colors.text} style={{ marginRight: 10 }} />
-            <Text style={[styles.accountName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-            <Text style={[styles.accountValue, { color: item.balance >= 0 ? colors.primary : colors.error }]}>{formatCurrency(item.balance)}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { setSelectedAccountForQuickAdd(item); setQuickAddValue(''); setModalVisible(true); }} style={styles.plusButton}><Ionicons name="add-circle-outline" size={28} color={colors.text} /></TouchableOpacity>
-    </View>
-  );
-
-  const renderCardItem = (item) => (
-    <View key={item.id} style={styles.accountRow}>
-        <TouchableOpacity style={styles.accountInfoClickable} onPress={() => navigation.navigate('CardForm', { card: item })}>
-            <Ionicons name="card-outline" size={24} color={colors.text} style={{ marginRight: 10 }} />
-            <View style={{ flex: 1 }}><Text style={[styles.accountName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text><Text style={{ fontSize: 10, color: colors.subText }}>Fecha dia {item.closing_day}</Text></View>
-            <Text style={[styles.accountValue, { color: COLORS.error }]}>{formatCurrency(item.invoiceAmount)}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Transaction', { preSelectedCard: item.id })} style={styles.plusButton}><Ionicons name="add-circle-outline" size={28} color={colors.text} /></TouchableOpacity>
-    </View>
-  );
-
-  const renderTransactionItem = (item) => {
-    const isExpense = item.type === 'expense';
-    const color = isExpense ? COLORS.error : COLORS.primary;
-    const iconName = isExpense ? 'arrow-up-circle' : 'arrow-down-circle';
+  const SafeList = ({ data, renderItem }) => {
+    if (isWeb) {
+        return (
+            <View style={{ height: 220, overflowY: 'auto', width: '100%' }}>
+                {data.map((item) => renderItem({ item }))}
+            </View>
+        );
+    }
     return (
-      <TouchableOpacity key={item.id} style={styles.miniItemContainer} onPress={() => navigation.navigate('Transaction', { transaction: item })}>
-        <Ionicons name={iconName} size={24} color={color} style={{ marginRight: 10 }} />
-        <View style={{ flex: 1 }}><Text style={[styles.miniItemTitle, { color: colors.text }]} numberOfLines={1}>{item.description}</Text><Text style={[styles.miniItemSubtitle, { color: colors.subText }]} numberOfLines={1}>{item.category_name} / {item.account_name}</Text></View>
-        <Text style={[styles.miniItemValue, { color }]}>{formatCurrency(item.amount)}</Text>
-      </TouchableOpacity>
+        <View style={{ height: 220 }}>
+            <FlatList 
+                data={data} 
+                renderItem={renderItem} 
+                keyExtractor={i => i.id.toString()} 
+                nestedScrollEnabled={true}
+            />
+        </View>
     );
   };
 
-  const fabStyle = [styles.fab, { backgroundColor: colors.primary }, Platform.select({ ios: { shadowColor: colors.primary }, android: { shadowColor: colors.primary }, web: { boxShadow: '0px 4px 12px rgba(74, 222, 128, 0.4)' } })];
-  const cardStyle = [styles.card, { backgroundColor: colors.card }, Platform.select({ ios: { shadowColor: colors.border }, android: { shadowColor: colors.border }, web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.05)' } })];
+  const renderRow = (icon, title, subtitle, value, color, onPress, onAdd) => (
+    <View key={title + value + Math.random()} style={styles.rowItem}>
+        <TouchableOpacity style={styles.rowClickable} onPress={onPress}>
+            <Ionicons name={icon} size={24} color={colors.text} style={{ marginRight: 12 }} />
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>{title}</Text>
+                {subtitle && <Text style={{ fontSize: 10, color: colors.subText }}>{subtitle}</Text>}
+            </View>
+            <Text style={[styles.rowValue, { color }]}>{formatCurrency(value)}</Text>
+        </TouchableOpacity>
+        {onAdd && (
+            <TouchableOpacity onPress={onAdd} style={styles.plusBtn}>
+                <Ionicons name="add-circle-outline" size={28} color={colors.text} />
+            </TouchableOpacity>
+        )}
+    </View>
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, height: isWeb ? '100vh' : '100%', overflow: 'hidden' }]}>
-      <ScrollView 
-        style={{ flex: 1 }} 
-        contentContainerStyle={{ padding: 20, paddingTop: 50, paddingBottom: 100, flexGrow: 1 }} 
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={true}
-      >
-        {/* --- CABEÇALHO COM MENU HAMBÚRGUER --- */}
-        <View style={styles.headerRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity onPress={() => navigation.openDrawer()} style={{ marginRight: 15 }}>
-                    <Ionicons name="menu" size={32} color={colors.text} />
-                </TouchableOpacity>
-                <View>
-                    <Text style={[styles.welcome, { color: colors.subText }]}>Olá, {user?.name}</Text>
-                    <Text style={[styles.title, { color: colors.text }]}>Visão Geral</Text>
+    <ScreenWrapper refreshing={refreshing} onRefresh={onRefresh}>
+      <AppHeader 
+        title="Visão Geral" 
+        subtitle={`Olá, ${user?.name}`} 
+        showMenu 
+        rightAction={
+            <TouchableOpacity style={[styles.extractBtn, { borderColor: colors.primary }]} onPress={() => navigation.navigate('TransactionList')}>
+                <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>Extrato</Text>
+                <Ionicons name="list" size={16} color={colors.primary} style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+        }
+      />
+
+      {loading && !refreshing ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+      ) : (
+        <>
+          {/* 1. GATINHO COM MOLDURA COLORIDA */}
+          <View style={{ alignItems: 'center', marginBottom: 30 }}>
+            {/* Moldura Dinâmica */}
+            <View style={[styles.petFrame, { borderColor: getMoodColor(dashboardData?.catStatus) }]}>
+                {/* Imagem Centralizada e com Cover */}
+                <Image 
+                    source={getPetImageSource(dashboardData?.catStatus)} 
+                    style={styles.petImage} 
+                    resizeMode="cover" 
+                />
+            </View>
+            
+            <TouchableOpacity onPress={() => setShowBalance(!showBalance)} style={styles.balanceRow}>
+                <Text style={{ fontSize: 16, color: colors.subText, marginRight: 8 }}>Saldo Atual</Text>
+                <Ionicons name={showBalance ? "eye-outline" : "eye-off-outline"} size={20} color={colors.text} />
+            </TouchableOpacity>
+            
+            <Text style={[styles.mainBalance, { color: colors.text }]}>
+                {showBalance ? formatCurrency(dashboardData?.balance) : 'R$ •••••'}
+            </Text>
+            
+            <Text style={{ color: getMoodColor(dashboardData?.catStatus), fontWeight: 'bold', fontSize: 14, marginTop: 5 }}>
+                {getPetMessage(dashboardData?.catStatus)}
+            </Text>
+          </View>
+
+          {/* 2. RESUMO FINANCEIRO (CORRIGIDO) */}
+          <View style={styles.summaryContainer}>
+            {/* Card Entradas */}
+            <View style={[styles.summaryCardFixed, { backgroundColor: colors.card, shadowColor: colors.border }]}>
+                <View style={[styles.summaryBar, { backgroundColor: COLORS.primary }]} />
+                <View style={styles.summaryContent}>
+                    <Text style={[styles.summaryLabel, { color: COLORS.primary }]}>Entradas</Text>
+                    <Text style={[styles.summaryValue, { color: COLORS.primary }]}>{formatCurrency(dashboardData?.income)}</Text>
                 </View>
             </View>
-            <TouchableOpacity style={[styles.extractButton, { borderColor: colors.primary }]} onPress={() => navigation.navigate('TransactionList')}><Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 12 }}>Ver Extrato</Text><Ionicons name="list" size={16} color={colors.primary} style={{ marginLeft: 4 }} /></TouchableOpacity>
-        </View>
-
-        {loading && !refreshing ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
-        ) : (
-          <>
-            {/* 1. SEÇÃO DO GATINHO (PET) */}
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                <View style={[styles.petFrame, { borderColor: getMoodColor(dashboardData?.catStatus) }]}>
-                    <Image source={getPetImageSource(dashboardData?.catStatus)} style={styles.petImage} resizeMode="cover" />
+            
+            {/* Espaçamento */}
+            <View style={{ width: 15 }} />
+            
+            {/* Card Saídas */}
+            <View style={[styles.summaryCardFixed, { backgroundColor: colors.card, shadowColor: colors.border }]}>
+                <View style={[styles.summaryBar, { backgroundColor: COLORS.error }]} />
+                <View style={styles.summaryContent}>
+                    <Text style={[styles.summaryLabel, { color: COLORS.error }]}>Saídas</Text>
+                    <Text style={[styles.summaryValue, { color: COLORS.error }]}>{formatCurrency(dashboardData?.expense)}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-                    <Text style={{ fontSize: 16, color: colors.subText, marginRight: 8 }}>Saldo Atual</Text>
-                    <TouchableOpacity onPress={() => setShowBalance(!showBalance)}>
-                        <Ionicons name={showBalance ? "eye-outline" : "eye-off-outline"} size={20} color={colors.text} />
-                    </TouchableOpacity>
-                </View>
-                <Text style={[styles.mainBalance, { color: colors.text }]}>{showBalance ? formatCurrency(dashboardData?.balance) : 'R$ •••••'}</Text>
-                <Text style={[styles.catMessage, { color: colors.subText, marginTop: 5, textAlign: 'center' }]}>{getPetMessage(dashboardData?.catStatus)}</Text>
             </View>
+          </View>
 
-            {/* 2. RESUMO FINANCEIRO (Entradas/Saídas) */}
-            <View style={styles.summaryContainer}>
-                <View style={[styles.summaryCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                    <View style={[styles.summaryBar, { backgroundColor: COLORS.primary }]} />
-                    <View style={styles.summaryContent}>
-                        <Text style={[styles.summaryLabel, { color: COLORS.primary }]}>Entradas</Text>
-                        <Text style={[styles.summaryValue, { color: COLORS.primary }]}>{formatCurrency(dashboardData?.income)}</Text>
+          {/* 3. GRÁFICO */}
+          {pieData.length > 0 && (
+            <>
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>Resumo</Text>
+                <InfoCard>
+                    <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 10 }}>
+                        <PieChart 
+                            data={pieData} 
+                            donut 
+                            radius={70} 
+                            innerRadius={45} 
+                            showText={true} 
+                            textColor="black" 
+                            textSize={12}
+                            fontWeight="bold"
+                            centerLabelComponent={() => (
+                                <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 14, fontWeight: 'bold', color: colors.text }}>{dashboardData?.percentageConsumed}%</Text>
+                                    <Text style={{ fontSize: 8, color: colors.subText }}>do Saldo</Text>
+                                </View>
+                            )}
+                        />
                     </View>
-                </View>
-                <View style={[styles.summaryCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                    <View style={[styles.summaryBar, { backgroundColor: COLORS.error }]} />
-                    <View style={styles.summaryContent}>
-                        <Text style={[styles.summaryLabel, { color: COLORS.error }]}>Saídas</Text>
-                        <Text style={[styles.summaryValue, { color: COLORS.error }]}>{formatCurrency(dashboardData?.expense)}</Text>
-                    </View>
-                </View>
-            </View>
-
-            {/* 3. GRÁFICO */}
-            {pieData.length > 0 && (
-                <>
-                    <Text style={[styles.sectionTitle, { color: '#2a3b96', marginBottom: 10, marginTop: 20 }]}>Resumo:</Text>
-                    <View style={[styles.recentCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                        <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                            <PieChart data={pieData} donut radius={80} innerRadius={50} textSize={10} showText textColor="white" fontWeight="bold" centerLabelComponent={() => ( <View style={{ justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 14, fontWeight: 'bold', color: colors.text }}>{dashboardData?.percentageConsumed}%</Text><Text style={{ fontSize: 8, color: colors.subText }}>do Saldo</Text></View> )} />
+                    {categoryList.map((cat, idx) => (
+                        <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color, marginRight: 8 }} />
+                                <Text style={{ color: colors.text }}>
+                                    {cat.name} <Text style={{fontSize: 10, color: colors.subText}}>({cat.percent}%)</Text>
+                                </Text>
+                            </View>
+                            <Text style={{ fontWeight: 'bold', color: COLORS.error }}>{formatCurrency(cat.total)}</Text>
                         </View>
-                        {categoryList.map((cat, idx) => ( <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><View style={{ flexDirection: 'row', alignItems: 'center' }}><View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color, marginRight: 8 }} /><Text style={{ color: colors.text, fontSize: 14 }}>{cat.name}</Text></View><Text style={{ color: COLORS.error, fontWeight: 'bold' }}>{formatCurrency(cat.total)}</Text></View> ))}
-                        <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: '#2a3b96' }]} onPress={() => navigation.navigate('ChartScreen')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Ver Gráficos</Text></TouchableOpacity>
-                        <View style={styles.footerRow}><Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text><Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(dashboardData?.expense)}</Text></View>
-                    </View>
-                </>
-            )}
+                    ))}
+                    <TouchableOpacity style={[styles.fullWidthBtn, { backgroundColor: colors.secondary }]} onPress={() => navigation.navigate('ChartScreen')}>
+                        <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Ver Gráficos</Text>
+                    </TouchableOpacity>
+                </InfoCard>
+            </>
+          )}
 
-            {/* 4. CONTAS */}
-            <Text style={[styles.sectionTitle, { color: '#2a3b96', marginBottom: 10, marginTop: 20 }]}>Contas:</Text>
-            <View style={[styles.recentCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                <View style={!isWeb ? { maxHeight: 200 } : {}}>
-                    <SafeList data={accounts} renderItem={renderAccountItem} ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />} />
-                </View>
-                <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: '#2a3b96' }]} onPress={() => navigation.navigate('AccountForm')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Adicionar Banco</Text></TouchableOpacity>
-                <View style={styles.footerRow}><Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text><Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(totalBalance)}</Text></View>
+          {/* 4. Contas */}
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Contas</Text>
+          <InfoCard>
+            <SafeList 
+                data={accounts} 
+                renderItem={({item}) => renderRow(
+                    item.is_fixed ? 'wallet-outline' : 'business-outline', 
+                    item.name, 
+                    null, 
+                    item.balance, 
+                    item.balance >= 0 ? colors.primary : colors.error, 
+                    () => navigation.navigate('AccountForm', { account: item }), 
+                    () => { setSelectedAccountForQuickAdd(item); setQuickAddValue(''); setModalVisible(true); }
+                )}
+            />
+            <TouchableOpacity style={[styles.fullWidthBtn, { backgroundColor: colors.secondary }]} onPress={() => navigation.navigate('AccountForm')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Adicionar Banco</Text></TouchableOpacity>
+            <View style={styles.footerRow}><Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text><Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(totalBalance)}</Text></View>
+          </InfoCard>
+
+          {/* 5. Cartões */}
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Cartões de Crédito</Text>
+          <InfoCard>
+            <View style={styles.tabs}>
+                <TouchableOpacity onPress={() => setCardTab('open')} style={[styles.tab, cardTab === 'open' && { backgroundColor: '#e0f2fe' }]}><Text style={{ fontWeight: 'bold', color: cardTab === 'open' ? colors.primary : colors.subText }}>Abertas</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setCardTab('closed')} style={[styles.tab, cardTab === 'closed' && { backgroundColor: '#ede9fe' }]}><Text style={{ fontWeight: 'bold', color: cardTab === 'closed' ? colors.secondary : colors.subText }}>Fechadas</Text></TouchableOpacity>
             </View>
+            <SafeList 
+                data={filteredCards} 
+                renderItem={({item}) => renderRow('card-outline', item.name, `Fecha dia ${item.closing_day}`, item.invoiceAmount, COLORS.error, () => navigation.navigate('CardForm', { card: item }), () => navigation.navigate('Transaction', { preSelectedCard: item.id }))}
+            />
+            <TouchableOpacity style={[styles.fullWidthBtn, { backgroundColor: colors.secondary }]} onPress={() => navigation.navigate('CardForm')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Adicionar Cartão</Text></TouchableOpacity>
+            <View style={styles.footerRow}><Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text><Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(filteredCardsTotal)}</Text></View>
+          </InfoCard>
 
-            {/* 5. CARTÕES */}
-            <Text style={[styles.sectionTitle, { color: '#2a3b96', marginTop: 25, marginBottom: 10 }]}>Cartões de Crédito:</Text>
-            <View style={[styles.recentCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                <View style={styles.tabContainer}>
-                    <TouchableOpacity onPress={() => setCardTab('open')} style={[styles.tabButton, cardTab === 'open' && { backgroundColor: '#60a5fa' }]}><Text style={[styles.tabText, cardTab === 'open' ? { color: '#FFF' } : { color: colors.subText }]}>Abertas</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={() => setCardTab('closed')} style={[styles.tabButton, cardTab === 'closed' && { backgroundColor: '#a78bfa' }]}><Text style={[styles.tabText, cardTab === 'closed' ? { color: '#FFF' } : { color: colors.subText }]}>Fechadas</Text></TouchableOpacity>
-                </View>
-                <View style={!isWeb ? { maxHeight: 200 } : {}}>
-                    <SafeList data={filteredCards} renderItem={renderCardItem} ListEmptyComponent={<Text style={{ textAlign: 'center', color: colors.subText, marginTop: 10 }}>Vazio.</Text>} ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />} />
-                </View>
-                <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: '#2a3b96' }]} onPress={() => navigation.navigate('CardForm')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Adicionar Cartão</Text></TouchableOpacity>
-                <View style={styles.footerRow}><Text style={{ color: colors.text, fontWeight: 'bold' }}>Total:</Text><Text style={{ color: colors.text, fontWeight: 'bold' }}>{formatCurrency(filteredCardsTotal)}</Text></View>
-            </View>
+          {/* 6. Transações */}
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Últimos Lançamentos</Text>
+          <InfoCard>
+            <SafeList 
+                data={recentTransactions} 
+                renderItem={({item}) => renderRow(item.type === 'expense' ? 'arrow-up-circle' : 'arrow-down-circle', item.description, `${item.category_name} / ${item.account_name}`, item.amount, item.type === 'expense' ? COLORS.error : colors.primary, () => navigation.navigate('Transaction', { transaction: item }), null)}
+            />
+            <TouchableOpacity style={[styles.fullWidthBtn, { backgroundColor: colors.secondary }]} onPress={() => navigation.navigate('TransactionList')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Ver Lançamentos</Text></TouchableOpacity>
+          </InfoCard>
 
-            {/* 6. TRANSAÇÕES */}
-            <Text style={[styles.sectionTitle, { color: '#2a3b96', marginTop: 25, marginBottom: 10 }]}>Últimos lançamentos:</Text>
-            <View style={[styles.recentCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-                <View style={!isWeb ? { height: 220 } : {}}> 
-                    <SafeList data={recentTransactions} renderItem={renderTransactionItem} onEndReached={loadMoreTransactions} onEndReachedThreshold={0.1} ListEmptyComponent={<Text style={{ textAlign: 'center', color: colors.subText, marginTop: 20 }}>Sem lançamentos.</Text>} />
-                </View>
-                <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: '#2a3b96', marginTop: 10 }]} onPress={() => navigation.navigate('TransactionList')}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Ver lançamentos</Text></TouchableOpacity>
-            </View>
-
-            {/* 7. BOTÕES EXTRAS (IA e Relatórios) */}
-            <Text style={[styles.sectionTitle, { color: '#2a3b96', marginTop: 25, marginBottom: 10 }]}>Ferramentas:</Text>
-            <TouchableOpacity style={[styles.toolButton, { backgroundColor: '#e0f2fe', borderColor: '#bae6fd' }]} onPress={() => navigation.navigate('ChatScreen')}><Ionicons name="chatbubbles-outline" size={24} color="#0284c7" /><View style={{ marginLeft: 15, flex: 1 }}><Text style={{ color: "#0369a1", fontWeight: 'bold', fontSize: 16 }}>Assistente IA</Text><Text style={{ color: "#0c4a6e", fontSize: 12 }}>Converse para lançar gastos</Text></View><Ionicons name="chevron-forward" size={20} color="#0369a1" /></TouchableOpacity>
-            <TouchableOpacity style={[styles.toolButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.navigate('ReportScreen')}><Ionicons name="document-text-outline" size={24} color={colors.text} /><View style={{ marginLeft: 15, flex: 1 }}><Text style={{ color: colors.text, fontWeight: 'bold', fontSize: 16 }}>Relatórios Mensais</Text><Text style={{ color: colors.subText, fontSize: 12 }}>Consulte o balanço detalhado</Text></View><Ionicons name="chevron-forward" size={20} color={colors.subText} /></TouchableOpacity>
-
-            <View style={{ height: 100 }} />
-          </>
-        )}
-      </ScrollView>
+          {/* 7. Ferramentas */}
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Ferramentas</Text>
+          <TouchableOpacity style={[styles.toolBtn, { backgroundColor: '#e0f2fe', borderColor: '#bae6fd' }]} onPress={() => navigation.navigate('ChatScreen')}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#0284c7" />
+            <View style={{ flex: 1, marginLeft: 15 }}><Text style={{ color: "#0369a1", fontWeight: 'bold' }}>Assistente IA</Text><Text style={{ fontSize: 12, color: "#0c4a6e" }}>Converse para lançar gastos</Text></View>
+            <Ionicons name="chevron-forward" size={20} color="#0369a1" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.toolBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.navigate('ReportScreen')}>
+            <Ionicons name="document-text-outline" size={24} color={colors.text} />
+            <View style={{ flex: 1, marginLeft: 15 }}><Text style={{ color: colors.text, fontWeight: 'bold' }}>Relatórios</Text><Text style={{ fontSize: 12, color: colors.subText }}>Balanço detalhado</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={colors.subText} />
+          </TouchableOpacity>
+        </>
+      )}
 
       {/* FAB */}
-      <TouchableOpacity style={fabStyle} onPress={() => navigation.navigate('Transaction')} activeOpacity={0.8}><Text style={styles.fabText}>+</Text></TouchableOpacity>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary }]} onPress={() => navigation.navigate('Transaction')}>
+        <Ionicons name="add" size={32} color="#FFF" />
+      </TouchableOpacity>
 
-      {/* Modal Quick Add */}
+      {/* Modal */}
       <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
             <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Adicionar Saldo</Text>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10, color: colors.text }}>Adicionar Saldo</Text>
                 <Text style={{ color: colors.subText, marginBottom: 15 }}>{selectedAccountForQuickAdd?.name}</Text>
-                <TextInput style={[styles.modalInput, { color: colors.text, borderColor: colors.border }]} placeholder="Valor" placeholderTextColor={colors.subText} keyboardType="numeric" autoFocus value={quickAddValue} onChangeText={setQuickAddValue} />
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleQuickAdd}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Confirmar</Text></TouchableOpacity>
+                <TextInput style={[styles.input, { color: colors.text, borderColor: colors.border }]} placeholder="Valor (Ex: 50.00)" placeholderTextColor={colors.subText} keyboardType="numeric" autoFocus value={quickAddValue} onChangeText={setQuickAddValue} />
+                <TouchableOpacity style={[styles.fullWidthBtn, { backgroundColor: colors.primary, marginTop: 10 }]} onPress={handleQuickAdd}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Confirmar</Text></TouchableOpacity>
             </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) },
-  content: { padding: 20, paddingTop: 50, paddingBottom: 100, flexGrow: 1 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  welcome: { fontSize: 16 },
-  title: { fontSize: 28, fontWeight: 'bold' },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold' },
+  extractBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 20, borderWidth: 1 },
   
-  petFrame: { width: 160, height: 160, borderRadius: 80, borderWidth: 6, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: '#fff', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5 },
-  petImage: { width: '100%', height: '100%' },
+  // Moldura do Pet (CORRIGIDA PARA CIRCULAR E CENTRALIZADA)
+  petFrame: { 
+    width: 150, 
+    height: 150, 
+    borderRadius: 75, // Metade exata da largura
+    borderWidth: 5, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    overflow: 'hidden', // Corta o que passar do círculo
+    backgroundColor: '#fff', 
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6 
+  },
+  petImage: { 
+    width: '100%', 
+    height: '100%' 
+  },
+  
+  balanceRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   mainBalance: { fontSize: 28, fontWeight: 'bold', marginTop: 5 },
-  catMessage: { fontSize: 14, fontStyle: 'italic', marginHorizontal: 20 },
-
-  summaryContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 10 },
-  summaryCard: { width: '48%', height: 60, borderRadius: 15, flexDirection: 'row', overflow: 'hidden', elevation: 3, ...Platform.select({ ios: { shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 2 } }, web: { boxShadow: '0px 2px 8px rgba(0,0,0,0.05)' } }) },
-  summaryBar: { width: 8, height: '100%' },
+  
+  // Summary Cards (CORRIGIDO PARA SOBREPOR O INFOCARD)
+  summaryContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 20 
+  },
+  summaryCardFixed: { 
+    width: '48%', // Força largura fixa para caber 2 na linha
+    height: 70, 
+    flexDirection: 'row', 
+    overflow: 'hidden',
+    borderRadius: 16,
+    elevation: 3,
+    ...Platform.select({
+        ios: { shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 2 } },
+        web: { boxShadow: '0px 2px 8px rgba(0,0,0,0.05)' }
+    })
+  },
+  summaryBar: { width: 6, height: '100%' },
   summaryContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   summaryLabel: { fontSize: 12, fontWeight: 'bold' },
-  summaryValue: { fontSize: 14, fontWeight: 'bold' },
+  summaryValue: { fontSize: 16, fontWeight: 'bold' },
 
-  card: { padding: 20, borderRadius: 16, marginBottom: 20, alignItems: 'center', elevation: 2 },
-  recentCard: { borderRadius: 16, padding: 15, elevation: 3, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  
-  accountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 5 },
-  accountInfoClickable: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  accountName: { fontSize: 14, fontWeight: '600', flex: 1, marginRight: 10 },
-  accountValue: { fontSize: 14, fontWeight: 'bold' },
-  plusButton: { paddingLeft: 10 },
-  tabContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  tabButton: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 20, marginHorizontal: 5, backgroundColor: '#f1f5f9' },
-  tabText: { fontSize: 12, fontWeight: 'bold' },
-  
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
+  fullWidthBtn: { padding: 12, borderRadius: 25, alignItems: 'center', marginTop: 10 },
+  rowItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  rowClickable: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  rowTitle: { fontSize: 14, fontWeight: '600' },
+  rowValue: { fontSize: 14, fontWeight: 'bold' },
+  plusBtn: { paddingLeft: 10 },
+  tabs: { flexDirection: 'row', marginBottom: 10 },
+  tab: { flex: 1, padding: 8, alignItems: 'center', borderRadius: 20, marginHorizontal: 5 },
   miniItemContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   miniItemTitle: { fontSize: 14, fontWeight: 'bold' },
   miniItemSubtitle: { fontSize: 10 },
   miniItemValue: { fontSize: 14, fontWeight: 'bold' },
-  
-  seeAllButton: { marginTop: 15, paddingVertical: 12, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  footerRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 10 },
-  extractButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1 },
-  catContainer: { alignItems: 'center' },
-  catIcon: { fontSize: 80, marginBottom: 10 },
-  fab: { position: 'absolute', bottom: 30, right: 30, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 10, zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },
-  fabText: { fontSize: 32, color: '#FFF', fontWeight: 'bold', marginTop: -2 },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  toolBtn: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 16, borderWidth: 1, marginBottom: 10 },
+  fab: { position: 'absolute', bottom: 30, right: 30, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 10, zIndex: 100 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '80%', padding: 20, borderRadius: 16, alignItems: 'center', elevation: 5 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-  modalInput: { width: '100%', borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 18, textAlign: 'center', marginBottom: 20 },
-  modalButton: { width: '100%', padding: 12, borderRadius: 8, alignItems: 'center' },
-  toolButton: { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 16, borderWidth: 1, elevation: 2, marginBottom: 15, ...Platform.select({ web: { boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }, default: {} }) }
+  input: { width: '100%', borderWidth: 1, borderRadius: 8, padding: 10, fontSize: 18, textAlign: 'center' }
 });

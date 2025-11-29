@@ -1,33 +1,33 @@
 export const COLORS = {
-  primary: '#4ade80',    // Verde Financeiro (Sucesso/Dinheiro)
-  primaryDark: '#16a34a',
-  secondary: '#60a5fa',  // Azul (Informativo)
-  background: '#f8fafc', // Fundo claro (off-white)
-  card: '#ffffff',       // Fundo dos cartões
-  text: '#1e293b',       // Texto principal (quase preto)
-  subText: '#64748b',    // Texto secundário (cinza)
-  border: '#e2e8f0',     // Bordas sutis
-  inputBg: '#f1f5f9',    // Fundo dos inputs
-  error: '#ef4444',      // Vermelho erro
+  primary: '#4ade80',    // Verde Vibrante (Ação principal)
+  primaryDark: '#16a34a', // Verde Escuro (Textos de destaque)
+  secondary: '#2a3b96',  // Azul (Detalhes institucionais)
   
-  // Cores do Gatinho (Moods)
-  catHappy: '#22c55e',
-  catWorried: '#f59e0b',
-  catSad: '#ef4444',
+  background: '#f8fafc', // Fundo Off-White (limpo)
+  card: '#ffffff',       // Fundo dos Cartões
+  
+  text: '#1e293b',       // Texto Principal (Quase preto)
+  subText: '#64748b',    // Texto Secundário (Cinza)
+  border: '#e2e8f0',     // Bordas sutis
+  
+  error: '#ef4444',      // Vermelho (Saídas/Erro)
+  success: '#22c55e',    // Verde (Entradas/Sucesso)
+  warning: '#f59e0b',    // Laranja (Atenção)
 };
 
 export const SIZING = {
   padding: 20,
-  radius: 12,
+  radius: 16,
   title: 24,
+  subtitle: 18,
+  icon: 24
 };
 
 export const FONTS = {
-  regular: 'System', // Ou sua fonte customizada
-  bold: 'System',    // No Android isso muda para 'Roboto' auto
+  regular: 'System', 
+  bold: 'System',    
 };
 
-// Tema padrão para o Contexto
 export const theme = {
   colors: COLORS,
   sizing: SIZING,
