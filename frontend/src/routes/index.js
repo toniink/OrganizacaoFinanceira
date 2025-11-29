@@ -15,9 +15,12 @@ import CardFormScreen from '../screens/CardFormScreen';
 import ChartScreen from '../screens/ChartScreen';
 import ChatScreen from '../screens/ChatScreen';
 import ReportScreen from '../screens/ReportScreen';
-
+import SettingsScreen from '../screens/SettingsScreen';
+import HelpScreen from '../screens/HelpScreen';
+import AboutScreen from '../screens/AboutScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import { SettingsScreen, ThemesScreen, AboutScreen, HelpScreen } from '../screens/PlaceholderScreens';
+import ThemesScreen from '../screens/ThemesScreen';
+import ThemesScreenDetails from '../screens/ThemesScreenDetails';
 
 // Componente Customizado do Menu
 import CustomDrawer from '../components/CustomDrawer';
@@ -67,7 +70,15 @@ export default function Routes() {
         <AppStack.Screen name="AccountForm" component={AccountFormScreen} /> 
         <AppStack.Screen name="ReportScreen" component={ReportScreen} /> 
         <AppStack.Screen name="CardForm" component={CardFormScreen} />
-        <AppStack.Screen name="ChartScreen" component={ChartScreen} /> 
+        <AppStack.Screen name="ChartScreen" component={ChartScreen} />
+        <AppStack.Screen name="SettingsScreen" component={SettingsScreen}/>
+        <AppStack.Screen name="HelpScreen" component={HelpScreen}/>
+        <AppStack.Screen name="AboutScreen" component={AboutScreen}/>
+        <AppStack.Screen name="ThemesScreen" component={ThemesScreen}/>
+        <AppStack.Screen name="ThemeDetail" component={ThemesScreenDetails}/>
+        
+        
+
        
       </AppStack.Navigator>
     );

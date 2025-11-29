@@ -1,12 +1,15 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { theme } from '../constants/theme';
 
 const ThemeContext = createContext({});
 
 export const ThemeProvider = ({ children }) => {
-  // Por enquanto retornamos o tema estático, mas aqui entraria a lógica Dark Mode
+  // Estado para armazenar qual bicho está selecionado (padrão 'cat')
+  // Opções: 'cat', 'dog', 'duck' (IDs definidos em constants/pets.js)
+  const [selectedPet, setSelectedPet] = useState('cat');
+
   return (
-    <ThemeContext.Provider value={theme}>
+    <ThemeContext.Provider value={{ ...theme, selectedPet, setSelectedPet }}>
       {children}
     </ThemeContext.Provider>
   );
