@@ -1,68 +1,72 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store'; // Armazenamento seguro para o Token
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Armazenamento comum para dados do usuário
 import { loginUser } from '../services/api';
 
 const AuthContext = createContext({});
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // Começa carregando para verificar storage
+  const [isLoading, setIsLoading] = useState(true); // Começa true para verificar se já existe login
 
+  // Ao abrir o App, verifica se tem dados salvos
   useEffect(() => {
-    // Ao iniciar o app, verifica se tem usuário e token salvos
     async function loadStorageData() {
       try {
-        // Recupera os dados do armazenamento local do celular
+        // Tenta recuperar o token (Seguro) e o usuário (Texto)
+        const storedToken = await SecureStore.getItemAsync('miau_token');
         const storedUser = await AsyncStorage.getItem('@MiauApp:user');
-        const storedToken = await AsyncStorage.getItem('@MiauApp:token');
 
-        if (storedUser && storedToken) {
-          // Se tiver dados, restaura a sessão automaticamente
-          // O token será pego automaticamente pelo interceptor do axios no api.js
+        if (storedToken && storedUser) {
+          // Se ambos existirem, restaura a sessão automaticamente
+          // O token será injetado automaticamente nas requisições pelo interceptor no api.js
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
-        console.log("Erro ao carregar dados do storage:", error);
+        console.log("Erro ao carregar sessão salva:", error);
       } finally {
-        // Finaliza o carregamento, permitindo que as Rotas decidam qual tela mostrar
-        setIsLoading(false); 
+        // Finaliza o carregamento, permitindo que o Routes decida (Login ou Dashboard)
+        setIsLoading(false);
       }
     }
 
     loadStorageData();
   }, []);
 
+  // Função de Login
   const login = async (email, password) => {
-    // O loading aqui é controlado pela tela de Login, mas podemos setar true se quisermos bloquear tudo
     try {
       const response = await loginUser(email, password);
       
       // O backend retorna { user: {...}, token: "..." }
       const { user, token } = response;
 
-      // 1. Define o estado (faz o app entrar na área logada imediatamente)
+      // 1. Atualiza estado da aplicação (entra na área logada)
       setUser(user);
 
-      // 2. Salva no armazenamento do celular para persistência
+      // 2. Salva dados para persistência
+      // Token vai para o cofre seguro
+      await SecureStore.setItemAsync('miau_token', token);
+      // Dados não sensíveis do usuário vão para o storage comum
       await AsyncStorage.setItem('@MiauApp:user', JSON.stringify(user));
-      await AsyncStorage.setItem('@MiauApp:token', token);
 
     } catch (error) {
-      // Repassa o erro para a tela de Login tratar (exibir o alert)
+      // Repassa o erro para a tela mostrar o alerta
       throw error;
     }
   };
 
+  // Função de Logout
   const logout = async () => {
     setUser(null);
-    // Limpa o armazenamento ao sair
+    // Limpa tudo do dispositivo
+    await SecureStore.deleteItemAsync('miau_token');
     await AsyncStorage.removeItem('@MiauApp:user');
-    await AsyncStorage.removeItem('@MiauApp:token');
   };
 
   return (
     <AuthContext.Provider value={{ 
-      signed: !!user, // Booleano para as rotas saberem se está logado
+      signed: !!user, // Booleano simples para checagem de rota
       user, 
       login, 
       logout, 
@@ -73,5 +77,5 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Hook personalizado para facilitar o uso
+// Hook personalizado para facilitar o uso em outras telas
 export const useAuth = () => useContext(AuthContext);

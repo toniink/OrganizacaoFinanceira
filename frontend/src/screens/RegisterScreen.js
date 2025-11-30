@@ -1,15 +1,20 @@
 import React, { useState, useRef } from 'react';
 import { 
   View, Text, TextInput, StyleSheet, Alert, 
-  TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView 
+  TouchableOpacity, Platform 
 } from 'react-native';
 import { registerUser } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
-import { SIZING } from '../constants/theme';
+import { COLORS } from '../constants/theme';
+
+// Componentes Padronizados
+import ScreenWrapper from '../components/ScreenWrapper';
 import StyledButton from '../components/StyledButton';
+import InfoCard from '../components/InfoCard';
 
 export default function RegisterScreen({ navigation }) {
   const { colors } = useTheme();
+  
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [monthlyIncome, setMonthlyIncome] = useState(''); 
@@ -22,13 +27,14 @@ export default function RegisterScreen({ navigation }) {
 
   const handleRegister = async () => {
     if (!username || !email || !password || !monthlyIncome) {
-      Alert.alert('Erro', 'Todos os campos são obrigatórios.');
+      const msg = 'Por favor, preencha todos os campos.';
+      Platform.OS === 'web' ? alert(msg) : Alert.alert('Campos vazios', msg);
       return;
     }
     
     setLoading(true);
     try {
-      // Converte a renda para float e substitui vírgula por ponto
+      // Envia para a API (convertendo renda para float)
       await registerUser({ 
         username, 
         email, 
@@ -36,12 +42,34 @@ export default function RegisterScreen({ navigation }) {
         monthlyIncome: parseFloat(monthlyIncome.replace(',', '.')) 
       });
       
-      Alert.alert('Sucesso', 'Conta criada! O gatinho já está esperando.', [
-          { text: 'Fazer Login', onPress: () => navigation.goBack() }
-      ]);
+      const successTitle = 'Cadastro realizado! 🎉';
+      const successMsg = 'Sua conta foi criada. Agora faça login para acessar.';
+
+      if (Platform.OS === 'web') {
+        alert(`${successTitle}\n${successMsg}`);
+        navigation.navigate('Login');
+      } else {
+        Alert.alert(
+          successTitle, 
+          successMsg, 
+          [{ text: 'IR PARA LOGIN', onPress: () => navigation.navigate('Login') }],
+          { cancelable: false }
+        );
+      }
+
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Erro ao registrar';
-      Alert.alert('Erro', errorMessage);
+      // Tratamento de erro específico
+      const errorMessage = error.response?.data?.error || 'Ocorreu um erro ao registrar.';
+      
+      if (Platform.OS === 'web') {
+        alert(errorMessage);
+      } else {
+        if (errorMessage.includes('já está em uso') || errorMessage.includes('cadastrado')) {
+           Alert.alert('Atenção', errorMessage); 
+        } else {
+           Alert.alert('Erro', errorMessage);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -52,27 +80,18 @@ export default function RegisterScreen({ navigation }) {
       { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }
   ];
 
-  // Estilo do card dinâmico corrigido para Web e Mobile
-  const cardStyle = [
-    styles.card,
-    { backgroundColor: colors.card },
-    Platform.OS !== 'web' ? { shadowColor: colors.border } : {}
-  ];
+  const labelStyle = [styles.label, { color: colors.text }];
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
-        <View style={cardStyle}>
-            <View style={styles.header}>
-                <Text style={[styles.title, { color: colors.text }]}>Nova Conta</Text>
-                <Text style={[styles.subtitle, { color: colors.subText }]}>Comece a controlar suas finanças.</Text>
-            </View>
+    <ScreenWrapper style={{ justifyContent: 'center' }}>
+      
+        <View style={styles.header}>
+            <Text style={[styles.title, { color: colors.text }]}>Nova Conta</Text>
+            <Text style={[styles.subtitle, { color: colors.subText }]}>Preencha os dados abaixo para começar.</Text>
+        </View>
 
-            <Text style={[styles.label, { color: colors.text }]}>Nome Completo</Text>
+        <InfoCard>
+            <Text style={labelStyle}>Nome Completo</Text>
             <TextInput
                 style={inputStyle}
                 placeholder="Ex: Ana Souza"
@@ -83,7 +102,7 @@ export default function RegisterScreen({ navigation }) {
                 onSubmitEditing={() => emailRef.current.focus()}
             />
             
-            <Text style={[styles.label, { color: colors.text }]}>E-mail</Text>
+            <Text style={labelStyle}>E-mail</Text>
             <TextInput
                 ref={emailRef}
                 style={inputStyle}
@@ -97,7 +116,7 @@ export default function RegisterScreen({ navigation }) {
                 onSubmitEditing={() => incomeRef.current.focus()}
             />
 
-            <Text style={[styles.label, { color: colors.text }]}>Renda Mensal (R$)</Text>
+            <Text style={labelStyle}>Renda Mensal (R$)</Text>
             <TextInput
                 ref={incomeRef}
                 style={inputStyle}
@@ -110,7 +129,7 @@ export default function RegisterScreen({ navigation }) {
                 onSubmitEditing={() => passwordRef.current.focus()}
             />
             
-            <Text style={[styles.label, { color: colors.text }]}>Senha</Text>
+            <Text style={labelStyle}>Senha</Text>
             <TextInput
                 ref={passwordRef}
                 style={inputStyle}
@@ -124,57 +143,43 @@ export default function RegisterScreen({ navigation }) {
             />
 
             <StyledButton 
-                title={loading ? "Criando..." : "CRIAR CONTA"} 
+                title={loading ? "CRIANDO..." : "CRIAR CONTA"} 
                 onPress={handleRegister} 
                 loading={loading}
                 style={{ marginTop: 10 }}
             />
+        </InfoCard>
 
-            <View style={styles.footer}>
-                <Text style={{ color: colors.subText }}>Já tem conta? </Text>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Fazer Login</Text>
-                </TouchableOpacity>
-            </View>
+        <View style={styles.footer}>
+            <Text style={{ color: colors.subText }}>Já tem conta? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>Fazer Login</Text>
+            </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { 
-      flexGrow: 1, 
-      justifyContent: 'center', 
-      padding: SIZING.padding 
+  header: { 
+    marginBottom: 25, 
+    alignItems: 'center' 
   },
-  card: {
-      borderRadius: 24,
-      padding: 30,
-      width: '100%',
-      maxWidth: 450,
-      alignSelf: 'center',
-      borderWidth: 1,
-      borderColor: 'rgba(0,0,0,0.05)',
-      ...Platform.select({
-        ios: {
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-        },
-        android: {
-            elevation: 5,
-        },
-        web: {
-            boxShadow: '0px 10px 25px rgba(0,0,0,0.05)',
-        }
-      })
+  title: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    marginBottom: 5 
   },
-  header: { marginBottom: 25, alignItems: 'center' },
-  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 5 },
-  subtitle: { fontSize: 14 },
-  label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, marginLeft: 2 },
+  subtitle: { 
+    fontSize: 16 
+  },
+  label: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    marginBottom: 8, 
+    marginLeft: 2 
+  },
   input: {
       borderWidth: 1,
       borderRadius: 12,
@@ -186,5 +191,6 @@ const styles = StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'center',
       marginTop: 20,
+      marginBottom: 20
   }
 });

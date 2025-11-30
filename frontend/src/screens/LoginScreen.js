@@ -1,12 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { 
   View, Text, TextInput, StyleSheet, Alert, 
-  KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity
+  TouchableOpacity, Platform 
 } from 'react-native';
 import { useAuth } from '../context/AuthContext'; 
 import { useTheme } from '../context/ThemeContext';
-import { SIZING } from '../constants/theme';
+import { SIZING, COLORS } from '../constants/theme';
+
+// Componentes Padronizados
+import ScreenWrapper from '../components/ScreenWrapper';
 import StyledButton from '../components/StyledButton';
+import InfoCard from '../components/InfoCard';
 
 export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
@@ -18,18 +22,27 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Atenção', 'Por favor, preencha e-mail e senha.');
+      const msg = 'Por favor, preencha e-mail e senha.';
+      Platform.OS === 'web' ? alert(msg) : Alert.alert('Atenção', msg);
       return;
     }
+
     try {
       await login(email, password);
+      // Sucesso: O AuthContext redireciona automaticamente via estado 'signed'
     } catch (error) {
-      console.log(error);
-      const errorMessage = error.response?.data?.error || 'Verifique suas credenciais.';
-      Alert.alert('Erro no Login', errorMessage);
+      // Tratamento de erros específicos vindos do Backend
+      const errorMessage = error.response?.data?.error || 'Erro de conexão com o servidor.';
+      
+      if (Platform.OS === 'web') {
+        alert(`Falha no Login: ${errorMessage}`);
+      } else {
+        Alert.alert('Falha no Login', errorMessage);
+      }
     }
   };
 
+  // Estilos Locais para Inputs
   const inputStyle = [
       styles.input, 
       { 
@@ -38,29 +51,22 @@ export default function LoginScreen({ navigation }) {
           borderColor: colors.border 
       }
   ];
-
-  // Estilo do card dinâmico para evitar aviso de shadow na Web
-  const cardStyle = [
-    styles.card,
-    { backgroundColor: colors.card },
-    Platform.OS !== 'web' ? { shadowColor: colors.border } : {} // Só aplica shadowColor nativo no mobile
-  ];
+  const labelStyle = [styles.label, { color: colors.text }];
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    // ScreenWrapper lida com o teclado e scroll automaticamente
+    <ScreenWrapper style={{ justifyContent: 'center' }}>
         
-        <View style={cardStyle}>
-            <View style={styles.header}>
-                <Text style={{fontSize: 40, marginBottom: 10}}>🐱</Text>
-                <Text style={[styles.title, { color: colors.text }]}>Gastto</Text>
-                <Text style={[styles.subtitle, { color: colors.subText }]}>Cuide do seu dinheiro (e do gato).</Text>
-            </View>
+        {/* Cabeçalho / Logo */}
+        <View style={styles.header}>
+            <Text style={{fontSize: 50, marginBottom: 10}}>🐱</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Miau Financeiro</Text>
+            <Text style={[styles.subtitle, { color: colors.subText }]}>Entre para cuidar do seu gatinho.</Text>
+        </View>
 
-            <Text style={[styles.label, { color: colors.text }]}>E-mail</Text>
+        {/* Formulário dentro do Card */}
+        <InfoCard>
+            <Text style={labelStyle}>E-mail</Text>
             <TextInput
                 style={inputStyle}
                 placeholder="seu@email.com"
@@ -73,7 +79,7 @@ export default function LoginScreen({ navigation }) {
                 onSubmitEditing={() => passwordRef.current.focus()}
             />
 
-            <Text style={[styles.label, { color: colors.text }]}>Senha</Text>
+            <Text style={labelStyle}>Senha</Text>
             <TextInput
                 ref={passwordRef}
                 style={inputStyle}
@@ -87,59 +93,45 @@ export default function LoginScreen({ navigation }) {
             />
 
             <StyledButton 
-                title={isLoading ? "Entrando..." : "ENTRAR"} 
+                title={isLoading ? "ENTRANDO..." : "ENTRAR"} 
                 onPress={handleLogin} 
                 loading={isLoading}
                 style={{ marginTop: 10 }}
             />
+        </InfoCard>
 
-            <View style={styles.footer}>
-                <Text style={{ color: colors.subText }}>Ainda não cuida do gatinho? </Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                    <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Cadastre-se</Text>
-                </TouchableOpacity>
-            </View>
+        {/* Rodapé */}
+        <View style={styles.footer}>
+            <Text style={{ color: colors.subText }}>Ainda não tem conta? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>Cadastre-se</Text>
+            </TouchableOpacity>
         </View>
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: { 
-      flexGrow: 1, 
-      justifyContent: 'center', 
-      padding: SIZING.padding 
+  header: { 
+    marginBottom: 30, 
+    alignItems: 'center',
+    marginTop: 20 
   },
-  card: {
-      borderRadius: 24,
-      padding: 30,
-      width: '100%',
-      maxWidth: 450,
-      alignSelf: 'center',
-      borderWidth: 1,
-      borderColor: 'rgba(0,0,0,0.05)',
-      // Sombras Cross-Platform
-      ...Platform.select({
-        ios: {
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-        },
-        android: {
-            elevation: 5,
-        },
-        web: {
-            boxShadow: '0px 10px 25px rgba(0,0,0,0.05)',
-        }
-      })
+  title: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    marginBottom: 5 
   },
-  header: { marginBottom: 30, alignItems: 'center' },
-  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 5 },
-  subtitle: { fontSize: 14 },
-  label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, marginLeft: 2 },
+  subtitle: { 
+    fontSize: 14 
+  },
+  label: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    marginBottom: 8, 
+    marginLeft: 2 
+  },
   input: {
       borderWidth: 1,
       borderRadius: 12,
@@ -151,5 +143,6 @@ const styles = StyleSheet.create({
       flexDirection: 'row',
       justifyContent: 'center',
       marginTop: 20,
+      marginBottom: 20
   }
 });

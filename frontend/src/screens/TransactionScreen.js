@@ -11,6 +11,7 @@ import { SIZING, COLORS } from '../constants/theme';
 import StyledButton from '../components/StyledButton';
 import api from '../services/api';
 
+// Importação Condicional do DatePicker
 let DateTimePicker;
 if (Platform.OS !== 'web') {
   DateTimePicker = require('@react-native-community/datetimepicker').default;
@@ -21,8 +22,9 @@ export default function TransactionScreen({ navigation, route }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  // Verifica se estamos no modo EDIÇÃO
+  // 1. Verifica Parâmetros (Edição ou Pré-seleção)
   const transactionToEdit = route.params?.transaction;
+  const preSelectedCardId = route.params?.preSelectedCard;
   const isEditing = !!transactionToEdit;
 
   // Estados do Formulário
@@ -32,11 +34,14 @@ export default function TransactionScreen({ navigation, route }) {
   const [date, setDate] = useState(transactionToEdit ? new Date(transactionToEdit.date) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   
+  // Listas
   const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(""); 
   
-  const [accounts, setAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState(""); 
+  // Lista Unificada (Contas + Cartões)
+  const [origins, setOrigins] = useState([]); 
+  // O valor selecionado será uma string combinada "tipo|id" (ex: "account|1" ou "credit_card|5")
+  const [selectedOrigin, setSelectedOrigin] = useState(""); 
+  const [selectedCategory, setSelectedCategory] = useState(""); 
   
   const [attachment, setAttachment] = useState(null);
 
@@ -44,46 +49,68 @@ export default function TransactionScreen({ navigation, route }) {
   const [showExtraOptions, setShowExtraOptions] = useState(isEditing ? true : false);
   const [isFixed, setIsFixed] = useState(transactionToEdit?.is_fixed === 1);
   const [repeat, setRepeat] = useState(false);
-  const [observation, setObservation] = useState(''); // Obs simplificada
+  const [observation, setObservation] = useState(''); 
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [catsRes, accountsRes] = await Promise.all([
+        // Busca Categorias, Contas e Cartões
+        const [catsRes, accountsRes, cardsRes] = await Promise.all([
           api.get(`/categories/${user.id}?type=${type}`),
-          api.get(`/accounts/${user.id}`)
+          api.get(`/accounts/${user.id}`),
+          api.get(`/cards/${user.id}?month=${date.getMonth()+1}&year=${date.getFullYear()}`) // Mês atual para listar cards
         ]);
+
         setCategories(catsRes.data);
-        setAccounts(accountsRes.data);
-        
-        // Lógica de Seleção:
-        // Se estiver editando, tenta selecionar o ID que veio do banco.
-        // Se for novo, seleciona o primeiro.
-        
-        if (isEditing && transactionToEdit.category_id) {
+
+        // --- MÁGICA DA LISTA UNIFICADA ---
+        // Juntamos contas e cartões em um array só, identificando o tipo
+        const accountOptions = accountsRes.data.map(acc => ({
+            label: `💰 ${acc.name} (R$ ${acc.balance.toFixed(2)})`,
+            value: `account|${acc.id}`,
+            type: 'account',
+            id: acc.id,
+            is_fixed: acc.is_fixed
+        }));
+
+        const cardOptions = cardsRes.data.map(card => ({
+            label: `💳 ${card.name}`,
+            value: `credit_card|${card.id}`,
+            type: 'credit_card',
+            id: card.id
+        }));
+
+        const allOrigins = [...accountOptions, ...cardOptions];
+        setOrigins(allOrigins);
+
+        // --- LÓGICA DE SELEÇÃO AUTOMÁTICA ---
+        if (isEditing) {
+            // Caso 1: Edição
             setSelectedCategory(transactionToEdit.category_id);
-        } else if (catsRes.data.length > 0) {
-            setSelectedCategory(catsRes.data[0].id);
+            setSelectedOrigin(`${transactionToEdit.origin_type}|${transactionToEdit.origin_id}`);
+        } else if (preSelectedCardId) {
+            // Caso 2: Veio do botão (+) do Cartão no Dashboard
+            const cardTarget = `credit_card|${preSelectedCardId}`;
+            setSelectedOrigin(cardTarget);
         } else {
-            setSelectedCategory("");
+            // Caso 3: Novo Lançamento (Default = Carteira)
+            const wallet = accountOptions.find(opt => opt.is_fixed === 1);
+            if (wallet) setSelectedOrigin(wallet.value);
+            else if (allOrigins.length > 0) setSelectedOrigin(allOrigins[0].value);
+            else setSelectedOrigin("");
         }
-        
-        if (isEditing && transactionToEdit.origin_id) {
-            setSelectedAccount(transactionToEdit.origin_id);
-        } else {
-            // Tenta achar carteira padrão se for novo
-            const wallet = accountsRes.data.find(acc => acc.is_fixed === 1);
-            if (wallet) setSelectedAccount(wallet.id);
-            else if (accountsRes.data.length > 0) setSelectedAccount(accountsRes.data[0].id);
-            else setSelectedAccount("");
+
+        // Seleciona categoria padrão se não estiver editando
+        if (!isEditing && catsRes.data.length > 0) {
+            setSelectedCategory(catsRes.data[0].id);
         }
 
       } catch (error) {
-        console.error(error);
+        console.error("Erro ao carregar dados:", error);
       }
     }
     loadData();
-  }, [type]);
+  }, [type]); // Recarrega se mudar de Receita <-> Despesa
 
   const onChangeDate = (event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -95,35 +122,35 @@ export default function TransactionScreen({ navigation, route }) {
     if (!result.canceled) setAttachment(result.assets[0]);
   };
 
-  // --- FUNÇÃO DE SALVAR/ATUALIZAR ---
   const handleSubmit = async () => {
-    if (!amount || !description || !selectedCategory || !selectedAccount) {
-      const msg = 'Preencha valor, descrição, categoria e conta.';
+    if (!amount || !description || !selectedCategory || !selectedOrigin) {
+      const msg = 'Preencha valor, descrição, categoria e origem.';
       Platform.OS === 'web' ? alert(msg) : Alert.alert('Atenção', msg);
       return;
     }
 
     setLoading(true);
+
+    // Separa o valor combinado "tipo|id"
+    const [originType, originId] = selectedOrigin.split('|');
+
     const payload = {
         description: description + (observation ? `\nObs: ${observation}` : ''),
         amount: parseFloat(amount.replace(',', '.')),
         type,
         date: date.toISOString().split('T')[0],
         category_id: selectedCategory,
-        origin_type: 'account',
-        origin_id: selectedAccount,
+        origin_type: originType, // 'account' ou 'credit_card'
+        origin_id: parseInt(originId),
         is_fixed: isFixed ? 1 : 0
     };
 
     try {
       if (isEditing) {
-        // UPDATE (PUT)
-        // Nota: Edição de anexo não implementada no back neste MVP, então enviamos JSON simples
         await api.put(`/transactions/${transactionToEdit.id}`, payload);
         const msg = 'Lançamento atualizado!';
         Platform.OS === 'web' ? alert(msg) : Alert.alert('Sucesso', msg);
       } else {
-        // CREATE (POST) - Usa FormData por causa do anexo
         const formData = new FormData();
         formData.append('user_id', user.id);
         Object.keys(payload).forEach(key => formData.append(key, payload[key]));
@@ -151,7 +178,6 @@ export default function TransactionScreen({ navigation, route }) {
     }
   };
 
-  // --- FUNÇÃO DE DELETAR ---
   const handleDelete = () => {
     const confirmDelete = async () => {
         setLoading(true);
@@ -171,7 +197,7 @@ export default function TransactionScreen({ navigation, route }) {
     if (Platform.OS === 'web') {
         if (confirm('Tem certeza que deseja excluir este lançamento?')) confirmDelete();
     } else {
-        Alert.alert('Confirmar Exclusão', 'Tem certeza que deseja apagar este lançamento permanentemente?', [
+        Alert.alert('Confirmar Exclusão', 'Tem certeza?', [
             { text: 'Cancelar', style: 'cancel' },
             { text: 'Excluir', style: 'destructive', onPress: confirmDelete }
         ]);
@@ -209,6 +235,7 @@ export default function TransactionScreen({ navigation, route }) {
         <Text style={labelStyle}>Descrição</Text>
         <TextInput style={inputStyle} placeholder="Ex: Almoço" placeholderTextColor={colors.subText} value={description} onChangeText={setDescription} />
 
+        {/* PICKER DE CATEGORIA */}
         <Text style={labelStyle}>Categoria</Text>
         <View style={[styles.pickerContainer, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Picker selectedValue={selectedCategory} onValueChange={(itemValue) => setSelectedCategory(itemValue)} style={{ color: colors.text, height: Platform.OS === 'web' ? 40 : undefined }}>
@@ -229,11 +256,19 @@ export default function TransactionScreen({ navigation, route }) {
             </>
         )}
 
-        <Text style={labelStyle}>Conta de Origem</Text>
+        {/* PICKER DE ORIGEM (CONTA OU CARTÃO) */}
+        <Text style={labelStyle}>Origem (Conta ou Cartão)</Text>
         <View style={[styles.pickerContainer, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-          <Picker selectedValue={selectedAccount} onValueChange={(itemValue) => setSelectedAccount(itemValue)} style={{ color: colors.text, height: Platform.OS === 'web' ? 40 : undefined }}>
-            <Picker.Item label="Selecione..." value="" color={colors.subText} />
-            {accounts.map(acc => (<Picker.Item key={acc.id} label={acc.name} value={acc.id} />))}
+          <Picker 
+            selectedValue={selectedOrigin} 
+            onValueChange={(itemValue) => setSelectedOrigin(itemValue)} 
+            style={{ color: colors.text, height: Platform.OS === 'web' ? 40 : undefined }}
+            enabled={!preSelectedCardId} // Se veio pré-selecionado do dashboard, trava a escolha (opcional)
+          >
+            <Picker.Item label="Selecione a origem..." value="" color={colors.subText} />
+            {origins.map((opt, index) => (
+                <Picker.Item key={index} label={opt.label} value={opt.value} />
+            ))}
           </Picker>
         </View>
 
@@ -256,12 +291,6 @@ export default function TransactionScreen({ navigation, route }) {
               <Text style={{ color: colors.text }}>Lançamento Fixo</Text>
               <Switch trackColor={{ false: colors.border, true: colors.primary }} thumbColor={'#FFF'} onValueChange={setIsFixed} value={isFixed} />
             </View>
-            {!isEditing && (
-                <View style={styles.switchRow}>
-                <Text style={{ color: colors.text }}>Repetir</Text>
-                <Switch trackColor={{ false: colors.border, true: colors.primary }} thumbColor={'#FFF'} onValueChange={setRepeat} value={repeat} />
-                </View>
-            )}
             <Text style={[labelStyle, { marginTop: 10 }]}>Observação</Text>
             <TextInput style={[inputStyle, { height: 80, textAlignVertical: 'top' }]} placeholder="Detalhes..." placeholderTextColor={colors.subText} value={observation} onChangeText={setObservation} multiline />
           </View>
@@ -269,7 +298,6 @@ export default function TransactionScreen({ navigation, route }) {
 
         <StyledButton title={isEditing ? "ATUALIZAR LANÇAMENTO" : "SALVAR LANÇAMENTO"} onPress={handleSubmit} loading={loading} style={{ marginTop: 30 }} />
 
-        {/* BOTÃO DELETAR (Só aparece se estiver editando) */}
         {isEditing && (
             <TouchableOpacity onPress={handleDelete} style={[styles.deleteButton, { borderColor: colors.error }]}>
                 <Text style={{ color: colors.error, fontWeight: 'bold' }}>🗑️ Excluir Lançamento</Text>
