@@ -170,7 +170,7 @@ export default function HelpScreen({ navigation }) {
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.contactLabel, { color: colors.subText }]}>E-mail:</Text>
-                        <Text style={[styles.contactValue, { color: colors.text }]} selectable>organizanceiros@gmail.com</Text>
+                        <Text style={[styles.contactValue, { color: colors.text }]} selectable>gastto@gmail.com</Text>
                     </View>
                 </View>
             </View>
@@ -178,14 +178,14 @@ export default function HelpScreen({ navigation }) {
             <View style={[styles.contactCard, { backgroundColor: colors.card }]}>
                 <TouchableOpacity 
                     style={styles.contactRow}
-                    onPress={() => Linking.openURL('https://github.com/SeuUsuario/SeuRepo')} // Link Placeholder
+                    onPress={() => Linking.openURL('https://github.com/toniink/OrganizacaoFinanceira')} // Link Placeholder
                 >
                     <View style={[styles.iconCircle, { backgroundColor: '#2a3b96' }]}>
                         <Ionicons name="logo-github" size={20} color="#FFF" />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.contactLabel, { color: colors.subText }]}>Github:</Text>
-                        <Text style={[styles.contactValue, { color: colors.text }]}>github.com/organizanceiros</Text>
+                        <Text style={[styles.contactValue, { color: colors.text }]}>github.com/toniink/OrganizacaoFinanceira/</Text>
                     </View>
                     <Ionicons name="open-outline" size={20} color={colors.subText} />
                 </TouchableOpacity>
@@ -201,7 +201,7 @@ export default function HelpScreen({ navigation }) {
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.contactLabel, { color: colors.subText }]}>Website:</Text>
-                        <Text style={[styles.contactValue, { color: colors.text }]}>www.organizanceiros.com.br</Text>
+                        <Text style={[styles.contactValue, { color: colors.text }]}>www.gastto.com.br</Text>
                     </View>
                     <Ionicons name="open-outline" size={20} color={colors.subText} />
                 </TouchableOpacity>

@@ -56,7 +56,7 @@ export default function LoginScreen({ navigation }) {
         <View style={cardStyle}>
             <View style={styles.header}>
                 <Text style={{fontSize: 40, marginBottom: 10}}>🐱</Text>
-                <Text style={[styles.title, { color: colors.text }]}>Miau Financeiro</Text>
+                <Text style={[styles.title, { color: colors.text }]}>Gastto</Text>
                 <Text style={[styles.subtitle, { color: colors.subText }]}>Cuide do seu dinheiro (e do gato).</Text>
             </View>
 

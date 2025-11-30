@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, 
-  ActivityIndicator, Platform 
-} from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import StyledButton from '../components/StyledButton';
+import { COLORS } from '../constants/theme';
 import api from '../services/api';
+
+// Componentes Padronizados
+import ScreenWrapper from '../components/ScreenWrapper';
+import AppHeader from '../components/AppHeader';
+import InfoCard from '../components/InfoCard';
+import StyledButton from '../components/StyledButton';
 
 export default function CardFormScreen({ navigation, route }) {
   const { colors } = useTheme();
@@ -17,7 +20,6 @@ export default function CardFormScreen({ navigation, route }) {
 
   const [name, setName] = useState(cardToEdit?.name || '');
   const [closingDay, setClosingDay] = useState(cardToEdit ? String(cardToEdit.closing_day) : '');
-  // Valor inicial só é usado na CRIAÇÃO
   const [initialAmount, setInitialAmount] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -41,7 +43,6 @@ export default function CardFormScreen({ navigation, route }) {
         user_id: user.id,
         name,
         closing_day: day,
-        // Envia o valor inicial apenas se não estiver editando
         initial_amount: !isEditing ? parseFloat(initialAmount.replace(',', '.') || 0) : 0
       };
 
@@ -88,22 +89,21 @@ export default function CardFormScreen({ navigation, route }) {
     }
   };
 
+  // Estilos locais para inputs
   const inputStyle = [styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }];
+  const labelStyle = [styles.label, { color: colors.text }];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={{ fontSize: 24, color: colors.text }}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {isEditing ? 'Editar Cartão' : 'Novo Cartão'}
-        </Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <ScreenWrapper>
+      {/* Cabeçalho Padronizado */}
+      <AppHeader 
+        title={isEditing ? 'Editar Cartão' : 'Novo Cartão'} 
+        showBack 
+      />
 
-      <View style={styles.content}>
-        <Text style={[styles.label, { color: colors.text }]}>Apelido do Cartão</Text>
+      {/* Conteúdo em Cartão */}
+      <InfoCard>
+        <Text style={labelStyle}>Apelido do Cartão</Text>
         <TextInput
           style={inputStyle}
           placeholder="Ex: Nubank Roxinho"
@@ -112,7 +112,7 @@ export default function CardFormScreen({ navigation, route }) {
           onChangeText={setName}
         />
 
-        <Text style={[styles.label, { color: colors.text }]}>Dia de Fechamento</Text>
+        <Text style={labelStyle}>Dia de Fechamento</Text>
         <TextInput
           style={inputStyle}
           placeholder="Dia (ex: 5)"
@@ -126,43 +126,39 @@ export default function CardFormScreen({ navigation, route }) {
         {/* CAMPO DE VALOR APENAS SE FOR NOVO CARTÃO */}
         {!isEditing && (
             <>
-                <Text style={[styles.label, { color: colors.text }]}>Gastos Atuais (Fatura Aberta)</Text>
+                <Text style={labelStyle}>Gastos Atuais (Fatura Aberta)</Text>
                 <TextInput
-                style={inputStyle}
-                placeholder="0,00"
-                placeholderTextColor={colors.subText}
-                value={initialAmount}
-                onChangeText={setInitialAmount}
-                keyboardType="numeric"
+                    style={inputStyle}
+                    placeholder="0,00"
+                    placeholderTextColor={colors.subText}
+                    value={initialAmount}
+                    onChangeText={setInitialAmount}
+                    keyboardType="numeric"
                 />
                 <Text style={{ fontSize: 12, color: colors.subText, marginBottom: 15, marginTop: -10 }}>
-                    Se já usou o cartão este mês, coloque o valor aqui para iniciar a fatura corretamente.
+                    Se já usou o cartão este mês, coloque o valor aqui.
                 </Text>
             </>
         )}
 
         <StyledButton 
-          title="SALVAR" 
+          title={isEditing ? "ATUALIZAR" : "SALVAR"} 
           onPress={handleSubmit} 
           loading={loading} 
           style={{ marginTop: 20 }} 
         />
 
         {isEditing && (
-          <TouchableOpacity onPress={handleDelete} style={[styles.deleteButton, { borderColor: colors.error }]}>
-            <Text style={{ color: colors.error, fontWeight: 'bold' }}>Excluir Cartão</Text>
+          <TouchableOpacity onPress={handleDelete} style={[styles.deleteButton, { borderColor: COLORS.error }]}>
+            <Text style={{ color: COLORS.error, fontWeight: 'bold' }}>Excluir Cartão</Text>
           </TouchableOpacity>
         )}
-      </View>
-    </View>
+      </InfoCard>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 50, paddingHorizontal: 20, paddingBottom: 15 },
-  title: { fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 20 },
   label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, marginLeft: 2 },
   input: { borderWidth: 1, borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 15 },
   deleteButton: { marginTop: 20, padding: 15, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }

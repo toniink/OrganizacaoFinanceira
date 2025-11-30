@@ -2,200 +2,195 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons'; 
+
+// Contextos e API
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { COLORS, SIZING } from '../constants/theme';
 import api from '../services/api';
 
+// Componentes Padronizados
+import ScreenWrapper from '../components/ScreenWrapper';
+import AppHeader from '../components/AppHeader';
+import InfoCard from '../components/InfoCard';
+
 export default function TransactionListScreen({ navigation, route }) {
   const { user } = useAuth();
   const { colors } = useTheme();
 
-  // Filtros opcionais vindos de outras telas
   const filterCategory = route.params?.filterCategory;
   const filterName = route.params?.filterName;
 
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [totals, setTotals] = useState({ income: 0, expense: 0 });
-  
-  // Controle de Data (Mês/Ano)
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [refreshing, setRefreshing] = useState(false);
+
+  const isWeb = Platform.OS === 'web';
 
   const fetchTransactions = async () => {
     setLoading(true);
     try {
       const month = currentDate.getMonth() + 1;
       const year = currentDate.getFullYear();
-
-      // Monta os parâmetros da requisição
       const params = { month, year };
-      // Se houver filtro de categoria vindo da navegação, adiciona-o
       if (filterCategory) params.category_id = filterCategory;
 
       const response = await api.get(`/transactions/${user.id}`, { params });
       const list = response.data;
       setTransactions(list);
 
-      // Calcula totais locais baseados na lista retornada
-      let inc = 0;
-      let exp = 0;
+      let inc = 0; let exp = 0;
       list.forEach(item => {
         if (item.type === 'income') inc += item.amount;
         else exp += item.amount;
       });
       setTotals({ income: inc, expense: exp });
 
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error(error); } finally { setLoading(false); setRefreshing(false); }
   };
 
-  // Recarrega os dados sempre que a tela ganha foco ou a data/filtro muda
   useFocusEffect(
     useCallback(() => {
       fetchTransactions();
     }, [currentDate, filterCategory])
   );
 
-  // --- Funções Auxiliares ---
-  const formatCurrency = (value) => {
-    return `R$${value.toFixed(2).replace('.', ',')}`;
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchTransactions();
   };
 
-  const getMonthName = (date) => {
-    const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    return months[date.getMonth()];
+  // --- Helpers ---
+  const formatCurrency = (value) => `R$${value.toFixed(2).replace('.', ',')}`;
+  const getMonthName = (date) => ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][date.getMonth()];
+  
+  const changeMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentDate(newDate);
   };
 
-  // --- Renderização do Item ---
+  // --- Render Item ---
   const renderItem = ({ item }) => {
     const isExpense = item.type === 'expense';
     const color = isExpense ? COLORS.error : COLORS.primary;
     const iconName = isExpense ? 'arrow-up-circle' : 'arrow-down-circle';
 
     return (
-      <TouchableOpacity 
-        style={styles.itemContainer}
-        activeOpacity={0.7}
-        // Navega para edição enviando o objeto transação
-        onPress={() => navigation.navigate('Transaction', { transaction: item })}
-      >
-        {/* Ícone Esquerda */}
-        <View style={{ marginRight: 15 }}>
-            <Ionicons name={iconName} size={32} color={color} />
-        </View>
-
-        {/* Textos Centrais */}
-        <View style={{ flex: 1 }}>
-            <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-                {item.description}
-            </Text>
-            <Text style={[styles.itemSubtitle, { color: colors.subText }]} numberOfLines={1}>
-                {item.category_name || 'Sem Categoria'} / {item.account_name || 'Conta'}
-            </Text>
-        </View>
-
-        {/* Valor Direita */}
-        <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[styles.itemValue, { color }]}>
-                {isExpense ? '-' : ''}{formatCurrency(item.amount)}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.border} style={{ marginTop: 4 }} />
-        </View>
-      </TouchableOpacity>
+      <View key={item.id} style={styles.itemWrapper}>
+        <TouchableOpacity 
+            style={styles.itemContainer}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('Transaction', { transaction: item })}
+        >
+            <View style={{ marginRight: 15 }}>
+                <Ionicons name={iconName} size={32} color={color} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>{item.description}</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.subText }]} numberOfLines={1}>
+                    {item.category_name || 'Sem Categoria'} / {item.account_name || 'Conta'}
+                </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.itemValue, { color }]}>{isExpense ? '-' : ''}{formatCurrency(item.amount)}</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.border} style={{ marginTop: 4 }} />
+            </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
-  // Estilo do Botão Flutuante (FAB)
+  // Lista que funciona bem na Web e Mobile
+  const ListContent = () => {
+    if (loading && !refreshing) {
+        return <ActivityIndicator color={colors.primary} style={{ marginTop: 50 }} />;
+    }
+
+    if (transactions.length === 0) {
+        return <Text style={{ textAlign: 'center', color: colors.subText, marginTop: 20 }}>Nenhum lançamento encontrado.</Text>;
+    }
+
+    if (isWeb) {
+        return <View>{transactions.map(item => renderItem({ item }))}</View>;
+    }
+
+    return (
+        <FlatList
+            data={transactions}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderItem}
+            scrollEnabled={false} // O ScreenWrapper já rola
+        />
+    );
+  };
+
+  // Estilos do FAB
   const fabStyle = [
     styles.fab, 
     { backgroundColor: colors.primary }, 
-    Platform.select({ 
-      ios: { shadowColor: colors.primary }, 
-      android: { shadowColor: colors.primary }, 
-      web: { boxShadow: '0px 4px 12px rgba(74, 222, 128, 0.4)' } 
-    })
+    Platform.select({ ios: { shadowColor: colors.primary }, android: { shadowColor: colors.primary }, web: { boxShadow: '0px 4px 12px rgba(74, 222, 128, 0.4)' } })
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      
-      {/* CABEÇALHO */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('Dashboard')}>
-            <Ionicons name="arrow-back" size={30} color={colors.subText} /> 
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.primary }]}>
-            {filterName ? `Gastos: ${filterName}` : 'Lançamentos'}
-        </Text>
-        <View style={{ width: 30 }} /> 
-      </View>
+    <View style={{ flex: 1 }}>
+      <ScreenWrapper refreshing={refreshing} onRefresh={onRefresh}>
+        
+        {/* 1. Cabeçalho com Botão Voltar Corrigido (showBack usa navigation.goBack()) */}
+        <AppHeader 
+            title={filterName ? `Gastos: ${filterName}` : 'Lançamentos'} 
+            showBack 
+        />
 
-      {/* SELETOR DE MÊS (Oculto se estiver filtrando por categoria específica) */}
-      {!filterCategory && (
-        <View style={styles.monthSelector}>
-            <Text style={[styles.monthText, { color: colors.primary }]}>
-                {getMonthName(currentDate)}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color={colors.primary} style={{ marginLeft: 5 }} />
-        </View>
-      )}
-
-      {/* CARDS DE RESUMO (Entradas / Saídas) */}
-      <View style={[styles.summaryContainer, filterCategory && { marginTop: 20 }]}>
-        {/* Card Entradas */}
-        <View style={[styles.summaryCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-            <View style={[styles.summaryBar, { backgroundColor: COLORS.primary }]} />
-            <View style={styles.summaryContent}>
-                <Text style={[styles.summaryLabel, { color: COLORS.primary }]}>Entradas</Text>
-                <Text style={[styles.summaryValue, { color: COLORS.primary }]}>{formatCurrency(totals.income)}</Text>
+        {/* 2. Seletor de Mês */}
+        {!filterCategory && (
+            <View style={styles.monthSelector}>
+                <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.arrowBtn}>
+                    <Ionicons name="chevron-back" size={24} color={colors.primary} />
+                </TouchableOpacity>
+                <View style={{ alignItems: 'center', width: 140 }}>
+                    <Text style={[styles.monthText, { color: colors.primary }]}>{getMonthName(currentDate)}</Text>
+                    <Text style={{ fontSize: 12, color: colors.subText }}>{currentDate.getFullYear()}</Text>
+                </View>
+                <TouchableOpacity onPress={() => changeMonth(1)} style={styles.arrowBtn}>
+                    <Ionicons name="chevron-forward" size={24} color={colors.primary} />
+                </TouchableOpacity>
             </View>
-        </View>
-
-        {/* Card Saídas */}
-        <View style={[styles.summaryCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-            <View style={[styles.summaryBar, { backgroundColor: COLORS.error }]} />
-            <View style={styles.summaryContent}>
-                <Text style={[styles.summaryLabel, { color: COLORS.error }]}>Saídas</Text>
-                <Text style={[styles.summaryValue, { color: COLORS.error }]}>{formatCurrency(totals.expense)}</Text>
-            </View>
-        </View>
-      </View>
-
-      {/* LISTA PRINCIPAL */}
-      <View style={[styles.listCard, { backgroundColor: colors.card, shadowColor: colors.border }]}>
-        {/* Cabeçalho da Lista (Filtros visuais) */}
-        <View style={styles.listHeaderActions}>
-            <TouchableOpacity style={{ marginRight: 15 }}>
-                <Ionicons name="filter-outline" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <TouchableOpacity>
-                <Ionicons name="ellipsis-vertical" size={20} color={colors.text} />
-            </TouchableOpacity>
-        </View>
-
-        {loading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
-        ) : (
-            <FlatList
-                data={transactions}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderItem}
-                contentContainerStyle={{ paddingBottom: 80 }}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <Text style={{ textAlign: 'center', color: colors.subText, marginTop: 20 }}>
-                        Nenhum lançamento encontrado.
-                    </Text>
-                }
-            />
         )}
-      </View>
 
-      {/* FAB - Botão Flutuante */}
+        {/* 3. Cards de Resumo */}
+        <View style={styles.summaryContainer}>
+            <InfoCard style={styles.summaryCard} noPadding>
+                <View style={[styles.summaryBar, { backgroundColor: COLORS.primary }]} />
+                <View style={styles.summaryContent}>
+                    <Text style={[styles.summaryLabel, { color: COLORS.primary }]}>Entradas</Text>
+                    <Text style={[styles.summaryValue, { color: COLORS.primary }]}>{formatCurrency(totals.income)}</Text>
+                </View>
+            </InfoCard>
+            <View style={{ width: 15 }} />
+            <InfoCard style={styles.summaryCard} noPadding>
+                <View style={[styles.summaryBar, { backgroundColor: COLORS.error }]} />
+                <View style={styles.summaryContent}>
+                    <Text style={[styles.summaryLabel, { color: COLORS.error }]}>Saídas</Text>
+                    <Text style={[styles.summaryValue, { color: COLORS.error }]}>{formatCurrency(totals.expense)}</Text>
+                </View>
+            </InfoCard>
+        </View>
+
+        {/* 4. Lista Principal */}
+        <InfoCard noPadding>
+            <View style={styles.listHeaderActions}>
+                <TouchableOpacity style={{ marginRight: 15 }}><Ionicons name="filter-outline" size={20} color={colors.text} /></TouchableOpacity>
+                <TouchableOpacity><Ionicons name="ellipsis-vertical" size={20} color={colors.text} /></TouchableOpacity>
+            </View>
+            <ListContent />
+        </InfoCard>
+
+      </ScreenWrapper>
+
+      {/* FAB - Irmão do ScreenWrapper */}
       <TouchableOpacity 
         style={fabStyle} 
         onPress={() => navigation.navigate('Transaction')} 
@@ -203,94 +198,26 @@ export default function TransactionListScreen({ navigation, route }) {
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingHorizontal: SIZING.padding,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  monthSelector: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 15,
-  },
-  monthText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  arrowBtn: { padding: 10 },
+  monthText: { fontSize: 18, fontWeight: 'bold' },
   
-  // Cards de Resumo
-  summaryContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: SIZING.padding,
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  summaryCard: {
-    width: '48%',
-    height: 60,
-    borderRadius: 15,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    elevation: 3,
-    ...Platform.select({
-        ios: { shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 2 } },
-        web: { boxShadow: '0px 2px 8px rgba(0,0,0,0.05)' }
-    })
-  },
-  summaryBar: {
-    width: 8,
-    height: '100%',
-  },
-  summaryContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
+  summaryContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  summaryCard: { flex: 1, height: 70, flexDirection: 'row', overflow: 'hidden' },
+  summaryBar: { width: 6, height: '100%' },
+  summaryContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  summaryLabel: { fontSize: 12, fontWeight: 'bold' },
+  summaryValue: { fontSize: 16, fontWeight: 'bold' },
 
-  // Lista Grande Branca
-  listCard: {
-    flex: 1,
-    marginHorizontal: SIZING.padding,
-    marginBottom: 20,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    elevation: 4,
-    ...Platform.select({
-        ios: { shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: 4 } },
-        web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.08)' }
-    })
-  },
-  listHeaderActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 10,
-  },
+  listHeaderActions: { flexDirection: 'row', justifyContent: 'flex-end', padding: 15, paddingBottom: 5 },
   
   // Item da Lista
+  itemWrapper: { paddingHorizontal: 15 },
   itemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -298,40 +225,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
   },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  itemSubtitle: {
-    fontSize: 12,
-  },
-  itemValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginRight: 5
-  },
+  itemTitle: { fontSize: 16, fontWeight: '600' },
+  itemSubtitle: { fontSize: 12 },
+  itemValue: { fontSize: 16, fontWeight: 'bold', marginRight: 5 },
 
-  // FAB Style
-  fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 10,
-    zIndex: 100, // Garante que fique em cima
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  fabText: {
-    fontSize: 32,
-    color: '#FFF',
-    fontWeight: 'bold',
-    marginTop: -2 
-  }
+  fab: { position: 'absolute', bottom: 30, right: 30, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', elevation: 10, zIndex: 100 },
+  fabText: { fontSize: 32, color: '#FFF', fontWeight: 'bold', marginTop: -2 }
 });

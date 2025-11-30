@@ -3,13 +3,16 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext'; // Importando o tema
 
 export default function CustomDrawer(props) {
   const { user, logout } = useAuth();
+  const { colors } = useTheme(); // Usando as cores do tema
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#1e3a8a' }}> 
-      {/* DrawerContentScrollView lida com a rolagem do menu */}
+    // Usa a cor secundária (Azul) definida no tema para consistência com os Headers
+    <View style={{ flex: 1, backgroundColor: colors.secondary }}> 
+      
       <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
         
         {/* Cabeçalho do Menu */}
@@ -19,7 +22,7 @@ export default function CustomDrawer(props) {
                 <Ionicons name="close" size={30} color="#FFF" />
             </TouchableOpacity>
 
-            {/* ÁREA DE PERFIL CLICÁVEL (AGORA REDIRECIONA) */}
+            {/* ÁREA DE PERFIL CLICÁVEL */}
             <TouchableOpacity 
                 style={styles.profileSection} 
                 onPress={() => props.navigation.navigate('Profile')}
@@ -44,37 +47,37 @@ export default function CustomDrawer(props) {
         <View style={styles.itemsContainer}>
             <DrawerItem 
                 label="Página Inicial"
-                icon={({color, size}) => <Ionicons name="home-outline" color="#FFF" size={22} />}
+                icon={({size}) => <Ionicons name="home-outline" color="#FFF" size={22} />}
                 labelStyle={styles.labelStyle}
                 onPress={() => props.navigation.navigate('Dashboard')}
             />
             <DrawerItem 
                 label="Configurações"
-                icon={({color, size}) => <Ionicons name="settings-outline" color="#FFF" size={22} />}
+                icon={({size}) => <Ionicons name="settings-outline" color="#FFF" size={22} />}
                 labelStyle={styles.labelStyle}
                 onPress={() => props.navigation.navigate('Settings')}
             />
             <DrawerItem 
                 label="Assistente IA"
-                icon={({color, size}) => <Ionicons name="chatbubbles-outline" color="#FFF" size={22} />}
+                icon={({size}) => <Ionicons name="chatbubbles-outline" color="#FFF" size={22} />}
                 labelStyle={styles.labelStyle}
                 onPress={() => props.navigation.navigate('ChatScreen')}
             />
             <DrawerItem 
                 label="Temas"
-                icon={({color, size}) => <Ionicons name="color-palette-outline" color="#FFF" size={22} />}
+                icon={({size}) => <Ionicons name="color-palette-outline" color="#FFF" size={22} />}
                 labelStyle={styles.labelStyle}
                 onPress={() => props.navigation.navigate('Themes')}
             />
             <DrawerItem 
                 label="Sobre a equipe"
-                icon={({color, size}) => <Ionicons name="information-circle-outline" color="#FFF" size={22} />}
+                icon={({size}) => <Ionicons name="information-circle-outline" color="#FFF" size={22} />}
                 labelStyle={styles.labelStyle}
                 onPress={() => props.navigation.navigate('About')}
             />
             <DrawerItem 
                 label="Ajuda"
-                icon={({color, size}) => <Ionicons name="help-circle-outline" color="#FFF" size={22} />}
+                icon={({size}) => <Ionicons name="help-circle-outline" color="#FFF" size={22} />}
                 labelStyle={styles.labelStyle}
                 onPress={() => props.navigation.navigate('Help')}
             />
@@ -106,7 +109,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 15,
-    // Adicionando um feedback visual de área clicável (opcional)
     paddingVertical: 5,
   },
   avatarContainer: {

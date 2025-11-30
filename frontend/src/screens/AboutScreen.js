@@ -1,8 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { COLORS, SIZING } from '../constants/theme';
+import { COLORS } from '../constants/theme';
+
+// --- COMPONENTES PADRONIZADOS ---
+import ScreenWrapper from '../components/ScreenWrapper';
+import AppHeader from '../components/AppHeader';
+import InfoCard from '../components/InfoCard';
 
 export default function AboutScreen({ navigation }) {
   const { colors } = useTheme();
@@ -12,148 +17,115 @@ export default function AboutScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Cabeçalho */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color="#FFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sobre</Text>
-        <View style={{ width: 28 }} />
-      </View>
+    <ScreenWrapper>
+      {/* Cabeçalho Padronizado */}
+      <AppHeader title="Sobre" showBack />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        
-        {/* CARD DO APP */}
-        <View style={styles.appCard}>
-            <View style={styles.appIconContainer}>
-                {/* Gatinho do App */}
-                <Ionicons name="paw" size={50} color={COLORS.primary} />
-            </View>
-            
-            <View style={{ flex: 1, paddingHorizontal: 15 }}>
-                <Text style={styles.appName}>Miau Financeiro</Text>
-                <Text style={styles.appVersion}>Versão MVP 1.0.0</Text>
-            </View>
+      {/* 1. CARD DO APP */}
+      <InfoCard style={styles.appCardContent}>
+          <View style={styles.appIconContainer}>
+              <Ionicons name="paw" size={40} color="#FFF" />
+          </View>
+          
+          <View style={{ flex: 1, paddingHorizontal: 15 }}>
+              <Text style={[styles.appName, { color: colors.text }]}>Gastto</Text>
+              <Text style={{ fontSize: 14, color: colors.subText }}>Versão MVP 1.0.0</Text>
+          </View>
 
-            <TouchableOpacity onPress={() => openLink('https://github.com/SeuUsuario/RepositorioDoProjeto')}>
-                <Ionicons name="logo-github" size={40} color="#333" />
-            </TouchableOpacity>
-        </View>
+          <TouchableOpacity onPress={() => openLink('https://github.com/SeuUsuario/RepositorioDoProjeto')}>
+              <Ionicons name="logo-github" size={30} color={colors.text} />
+          </TouchableOpacity>
+      </InfoCard>
 
-        {/* SEÇÃO INTEGRANTES */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Integrantes</Text>
+      {/* 2. SEÇÃO INTEGRANTES */}
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Integrantes</Text>
 
-        {/* Antonio */}
-        <View style={styles.memberCard}>
-            <View style={[styles.avatarPlaceholder, { backgroundColor: '#60a5fa' }]}>
-                <Text style={styles.avatarText}>AT</Text>
-            </View>
-            <Text style={styles.memberName}>Antonio Tavares</Text>
-            <TouchableOpacity onPress={() => openLink('https://github.com/AntonioTavares')}>
-                <Ionicons name="logo-github" size={32} color="#2a3b96" />
-            </TouchableOpacity>
-        </View>
+      {/* Card Antonio */}
+      <InfoCard noPadding style={styles.memberCard}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: '#60a5fa' }]}>
+              <Text style={styles.avatarText}>AT</Text>
+          </View>
+          <Text style={[styles.memberName, { color: colors.text }]}>Antonio Tavares</Text>
+          <TouchableOpacity style={styles.githubBtn} onPress={() => openLink('https://github.com/AntonioTavares')}>
+              <Ionicons name="logo-github" size={24} color={COLORS.secondary} />
+          </TouchableOpacity>
+      </InfoCard>
 
-        {/* Marcele */}
-        <View style={styles.memberCard}>
-            <View style={[styles.avatarPlaceholder, { backgroundColor: '#f472b6' }]}>
-                <Text style={styles.avatarText}>MR</Text>
-            </View>
-            <Text style={styles.memberName}>Marcele Rodrigues</Text>
-            <TouchableOpacity onPress={() => openLink('https://github.com/MarceleRodrigues')}>
-                <Ionicons name="logo-github" size={32} color="#2a3b96" />
-            </TouchableOpacity>
-        </View>
+      {/* Card Marcele */}
+      <InfoCard noPadding style={styles.memberCard}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: '#f472b6' }]}>
+              <Text style={styles.avatarText}>MR</Text>
+          </View>
+          <Text style={[styles.memberName, { color: colors.text }]}>Marcele Rodrigues</Text>
+          <TouchableOpacity style={styles.githubBtn} onPress={() => openLink('https://github.com/MarceleRodrigues')}>
+              <Ionicons name="logo-github" size={24} color={COLORS.secondary} />
+          </TouchableOpacity>
+      </InfoCard>
 
-        {/* SEÇÃO JUSTIFICATIVA */}
-        <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 20 }]}>Justificativa do tema</Text>
-        
-        <View style={styles.textCard}>
-            <Text style={styles.descriptionText}>
-                O <Text style={{ fontWeight: 'bold' }}>Miau Financeiro</Text> é um MVP desenvolvido para a disciplina de Programação para Dispositivos Móveis, utilizando React Native.
-                {'\n\n'}
-                O objetivo é oferecer uma ferramenta simples, portátil e intuitiva de gerenciamento financeiro.
-                {'\n\n'}
-                <Text style={{ fontWeight: 'bold' }}>Público-alvo:</Text> Universitários que precisam equilibrar orçamentos apertados, recebendo muitas vezes menos do que o limite do cartão proporciona, o que facilita o acúmulo de dívidas.
-            </Text>
-        </View>
+      {/* 3. SEÇÃO JUSTIFICATIVA */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 10 }]}>Justificativa do tema</Text>
+      
+      <InfoCard>
+          <Text style={[styles.descriptionText, { color: colors.text }]}>
+              O <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>Gastto</Text> é um MVP desenvolvido para a disciplina de Programação para Dispositivos Móveis, utilizando React Native.
+              {'\n\n'}
+              O objetivo é oferecer uma ferramenta simples, portátil e intuitiva de gerenciamento financeiro.
+              {'\n\n'}
+              <Text style={{ fontWeight: 'bold' }}>Público-alvo:</Text> Universitários que precisam equilibrar orçamentos apertados, recebendo muitas vezes menos do que o limite do cartão proporciona, o que facilita o acúmulo de dívidas.
+          </Text>
+      </InfoCard>
 
-        <View style={{ height: 50 }} />
-      </ScrollView>
-    </View>
+      <View style={{ height: 20 }} />
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    backgroundColor: '#2a3b96', // Azul escuro do topo
+  // App Card
+  appCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    elevation: 4,
-  },
-  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
-  content: { padding: 20 },
-  
-  // Card Principal do App
-  appCard: {
-    backgroundColor: '#e5e7eb', // Cinza claro
-    borderRadius: 0, // Quadrado como na imagem ou levemente arredondado
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
   },
   appIconContainer: {
-    width: 70,
-    height: 70,
-    backgroundColor: '#93c5fd', // Azul claro placeholder
+    width: 60,
+    height: 60,
+    backgroundColor: COLORS.primary, 
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 12,
   },
-  appName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  appVersion: { fontSize: 14, color: '#666', marginTop: 4 },
+  appName: { fontSize: 18, fontWeight: 'bold' },
 
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
+    marginTop: 20,
     marginLeft: 5
   },
 
-  // Cards dos Membros
+  // Member Cards
   memberCard: {
-    backgroundColor: '#e5e7eb',
-    padding: 15,
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 15,
     marginBottom: 10,
   },
   avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 4, // Quadrado na imagem, mas pode ser redondo
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 15,
   },
-  avatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
-  memberName: { flex: 1, fontSize: 16, fontWeight: '600', color: '#333' },
+  avatarText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  memberName: { flex: 1, fontSize: 16, fontWeight: '600' },
+  githubBtn: { padding: 5 },
 
-  // Card de Texto
-  textCard: {
-    backgroundColor: '#e5e7eb',
-    padding: 20,
-  },
+  // Texto
   descriptionText: {
     fontSize: 14,
-    color: '#333',
     lineHeight: 22,
     textAlign: 'justify'
   }

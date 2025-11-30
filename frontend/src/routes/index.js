@@ -65,6 +65,7 @@ export default function Routes() {
         <AppStack.Screen name="MainDrawer" component={DrawerRoutes} />
         
         {/* Telas que abrem POR CIMA do menu (com botão voltar) */}
+        
         <AppStack.Screen name="Transaction" component={TransactionScreen} />
         <AppStack.Screen name="TransactionList" component={TransactionListScreen} />
         <AppStack.Screen name="AccountForm" component={AccountFormScreen} /> 
